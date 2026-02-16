@@ -748,6 +748,10 @@ class BufferAssigner {
     // If true, allocate buffers for constant instructions.
     bool allocate_buffers_for_constants = false;
 
+    // If true, buffer assignment will try FAST_MERGE algorithm and fall back to
+    // DEFAULT if FAST_MERGE results in OOM.
+    bool enable_fast_merge_or_default_fallback = false;
+
     // Functor used to assign colors to newly allocated logical buffers.
     Colorer colorer = DefaultColorer();
 
@@ -770,6 +774,11 @@ class BufferAssigner {
     buffer_assignment::BufferAssignmentAlgorithmProto::Value
         buffer_assignment_algorithm =
             buffer_assignment::BufferAssignmentAlgorithmProto::DEFAULT;
+
+    // Optional callback to return the memory limit for a given buffer color.
+    // If set and returns > 0, the returned limit is used instead of the
+    // default module config's device memory size.
+    std::function<int64_t(LogicalBuffer::Color)> color_memory_limit;
   };
 
   static Colorer DefaultColorer() {
@@ -854,6 +863,7 @@ class BufferAssigner {
       bool run_whole_module_heap_simulation, BufferAssignment* assignment,
       buffer_assignment::BufferAssignmentAlgorithmProto::Value
           buffer_assignment_algorithm,
+      bool enable_fast_merge_or_default_fallback,
       const PrivateStacks& private_stacks,
       GlobalDecreasingSizeBestFitHeap<HloValue>::BufferIntervalCompare
           heap_buffer_interval_compare,
