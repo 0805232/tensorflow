@@ -445,6 +445,8 @@ bool HloDataflowAnalysis::UpdateSendValueSet(HloInstruction* send) {
 bool HloDataflowAnalysis::UpdateAsyncStartValueSet(
     HloInstruction* async_start) {
   CHECK_EQ(async_start->opcode(), HloOpcode::kAsyncStart);
+  CHECK_GE(async_start->shape().tuple_shapes().size(), 3);
+
   bool changed = false;
   // AsyncStart forwards the operand values to element {0} of its output.
   for (int64_t i = 0; i < async_start->operand_count(); ++i) {
@@ -475,51 +477,64 @@ bool HloDataflowAnalysis::UpdateAsyncStartValueSet(
   // {1} of its output.
   HloInstruction* root =
       async_start->async_wrapped_computation()->root_instruction();
-  ShapeUtil::ForEachSubshape(
-      root->shape(), [&](const Shape& subshape, const ShapeIndex& index) {
-        if (!subshape.IsArray()) {
-          return;
-        }
-        const HloValueSet& root_value_set = GetValueSet(root, index);
+  const Shape& res_shape = async_start->shape().tuple_shapes(1);
 
-        ShapeIndex output_index = {1};
-        output_index.insert(output_index.end(), index.begin(), index.end());
+  if (!res_shape.IsTuple() || res_shape.tuple_shapes().size() > 0) {
+    // We only track values if the output is not an empty tuple, in which case,
+    // there are no values to track.
+    // We assume that res_shape is a prefix of the shape of root.
+    ShapeUtil::ForEachSubshape(res_shape, [&](const Shape& subshape,
+                                              const ShapeIndex& index) {
+      if (!subshape.IsArray()) {
+        return;
+      }
+      const HloValueSet& root_value_set = GetValueSet(root, index);
 
-        HloValueSet& value_set = GetMutableValueSet(async_start, output_index);
-        if (value_set != root_value_set) {
-          value_set = root_value_set;
-          changed = true;
-        }
-      });
+      ShapeIndex output_index = {1};
+      output_index.insert(output_index.end(), index.begin(), index.end());
+
+      HloValueSet& value_set = GetMutableValueSet(async_start, output_index);
+      if (value_set != root_value_set) {
+        value_set = root_value_set;
+        changed = true;
+      }
+    });
+  }
   return changed;
 }
 
 bool HloDataflowAnalysis::UpdateAsyncUpdateValueSet(
     HloInstruction* async_update) {
   CHECK_EQ(async_update->opcode(), HloOpcode::kAsyncUpdate);
-  CHECK_EQ(async_update->shape(), async_update->operand(0)->shape());
+
+  // Relaxed CHECK for late-binding growing prefix.
+  const HloInstruction* prev_async_op = async_update->operand(0);
+  const Shape& prev_input_prefix = prev_async_op->shape().tuple_shapes(0);
+  const Shape& curr_input_prefix = async_update->shape().tuple_shapes(0);
+
+  CHECK_LE(prev_input_prefix.tuple_shapes().size(),
+           curr_input_prefix.tuple_shapes().size());
+
   bool changed = false;
   HloInstruction* root =
       HloInstruction::IsThreadIncluded(async_update->async_execution_thread(),
                                        execution_threads_)
           ? async_update->async_wrapped_computation()->root_instruction()
           : nullptr;
-  // AsyncUpdate forwards all of the operand values to corresponding elements of
-  // its output.
+
+  // 1. Forward everything from operand(0) to async_update.
   ShapeUtil::ForEachSubshape(
-      async_update->operand(0)->shape(),
+      prev_async_op->shape(),
       [&](const Shape& subshape, const ShapeIndex& index) {
         if (!subshape.IsArray()) {
           return;
         }
         const HloValueSet& operand_value_set =
-            GetValueSet(async_update->operand(0), index);
+            GetValueSet(prev_async_op, index);
 
         HloValueSet& value_set = GetMutableValueSet(async_update, index);
         CHECK_GE(index.size(), 0);
         if (index[0] == 1 && root != nullptr) {
-          // If this subshape is an output (index {1}), we need to create the
-          // union with the async wrapped computation root.
           ShapeIndex root_index(index.begin() + 1, index.end());
           const HloValueSet& root_value_set = GetValueSet(root, root_index);
           changed |=
@@ -529,6 +544,31 @@ bool HloDataflowAnalysis::UpdateAsyncUpdateValueSet(
           changed = true;
         }
       });
+
+  // 2. Forward newly bound operands.
+  CHECK(prev_input_prefix.IsTuple());
+  CHECK(curr_input_prefix.IsTuple());
+  int64_t num_prev_params = prev_input_prefix.tuple_shapes().size();
+  int64_t num_curr_params = curr_input_prefix.tuple_shapes().size();
+
+  for (int64_t i = num_prev_params; i < num_curr_params; ++i) {
+    int64_t operand_idx = i - num_prev_params + 1;
+    const HloInstruction* operand = async_update->operand(operand_idx);
+    ShapeUtil::ForEachSubshape(
+        operand->shape(), [&](const Shape& subshape, const ShapeIndex& index) {
+          if (!subshape.IsArray()) {
+            return;
+          }
+
+          ShapeIndex full_index = {0, i};
+          full_index.insert(full_index.end(), index.begin(), index.end());
+
+          const HloValueSet& operand_value_set = GetValueSet(operand, index);
+          HloValueSet& value_set = GetMutableValueSet(async_update, full_index);
+          changed |= value_set.AssignUnionOf({&operand_value_set});
+        });
+  }
+
   return changed;
 }
 
@@ -761,6 +801,8 @@ bool HloDataflowAnalysis::UpdateParameterValueSet(HloInstruction* parameter) {
 
   std::vector<const InstructionValueSet*> inputs;
   bool need_phi = false;
+  bool changed = false;
+
   for (const CallSite& callsite : call_graph_node.caller_callsites()) {
     const HloOpcode& opcode = callsite.instruction()->opcode();
     if (opcode == HloOpcode::kCall) {
@@ -806,22 +848,31 @@ bool HloDataflowAnalysis::UpdateParameterValueSet(HloInstruction* parameter) {
       CHECK(found_parent);
       need_phi = true;
     } else if (opcode == HloOpcode::kAsyncStart) {
-      inputs.push_back(&GetInstructionValueSet(
-          callsite.instruction()->operand(parameter->parameter_number())));
-    } else if (opcode == HloOpcode::kAsyncUpdate ||
-               opcode == HloOpcode::kAsyncDone) {
-      return GetInstructionValueSet(parameter).AssignUnionOf(
-          GetInstructionValueSet(callsite.instruction()->operand(0)),
-          {0, parameter->parameter_number()});
+      const HloAsyncInstruction* async_start =
+          Cast<HloAsyncInstruction>(callsite.instruction());
+      // Compute value set from the last async operation in the chain.
+      const HloInstruction* last_async_op =
+          async_start->async_chain_done()->operand(0);
+
+      const Shape& params_shape = last_async_op->shape().tuple_shapes(0);
+      if (parameter->parameter_number() < params_shape.tuple_shapes().size()) {
+        changed |= GetInstructionValueSet(parameter).AssignUnionOf(
+            GetInstructionValueSet(last_async_op),
+            {0, parameter->parameter_number()});
+      }
     } else {
       LOG(FATAL) << "CallContext::kSequential computations should only be "
                     "called from call, while, or conditional instructions";
     }
   }
-  if (ssa_form_ && need_phi) {
-    return Phi(parameter, inputs);
+  if (inputs.empty()) {
+    return changed;
   }
-  return GetInstructionValueSet(parameter).AssignUnionOf(inputs);
+
+  if (ssa_form_ && need_phi) {
+    return changed || Phi(parameter, inputs);
+  }
+  return changed || GetInstructionValueSet(parameter).AssignUnionOf(inputs);
 }
 
 bool HloDataflowAnalysis::UpdateTupleValueSet(HloInstruction* tuple) {
