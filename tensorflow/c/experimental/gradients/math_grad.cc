@@ -64,7 +64,7 @@ class AddGradientFunction : public GradientFunction {
     grad_inputs[1]->Ref();
     return absl::OkStatus();
   }
-  ~AddGradientFunction() override {}
+  ~AddGradientFunction() override = default;
 };
 
 class ExpGradientFunction : public GradientFunction {
@@ -85,7 +85,7 @@ class ExpGradientFunction : public GradientFunction {
         Mul(ctx, conj_output, grad_outputs[0], &grad_inputs[0], name.c_str()));
     return absl::OkStatus();
   }
-  ~ExpGradientFunction() override {}
+  ~ExpGradientFunction() override = default;
 
  private:
   AbstractTensorHandlePtr exp_;
@@ -104,7 +104,7 @@ class SqrtGradientFunction : public GradientFunction {
                                 &grad_inputs[0], name.c_str()));
     return absl::OkStatus();
   }
-  ~SqrtGradientFunction() override {}
+  ~SqrtGradientFunction() override = default;
 
  private:
   AbstractTensorHandlePtr sqrt_;
@@ -232,7 +232,7 @@ class NegGradientFunction : public GradientFunction {
         ops::Neg(ctx, grad_outputs[0], &grad_inputs[0], name.c_str()));
     return absl::OkStatus();
   }
-  ~NegGradientFunction() override {}
+  ~NegGradientFunction() override = default;
 };
 
 class SubGradientFunction : public GradientFunction {
@@ -260,7 +260,7 @@ class SubGradientFunction : public GradientFunction {
 
     return absl::OkStatus();
   }
-  ~SubGradientFunction() override {}
+  ~SubGradientFunction() override = default;
 };
 
 class MulGradientFunction : public GradientFunction {
