@@ -174,7 +174,7 @@ message OptimizationOptions {
   }
 }
 
-// next: 2
+// next: 3
 message ServiceOptions {
   // If true, the tf.data service client allocates data to pinned memory, which
   // faciliates more efficient copying from host memory to GPU memory
@@ -184,6 +184,13 @@ message ServiceOptions {
   // depending on the implementation.
   oneof optional_pinned {
     bool pinned = 1;
+  }
+
+  // If true, the tf.data service dispatcher dispatches N splits for datasets
+  // with `.take(N)`. By default, each worker takes N elements, and the dataset
+  // produces N * num_workers elements.
+  oneof optional_take_splits_on_dispatcher {
+    bool take_splits_on_dispatcher = 2;
   }
 }
 

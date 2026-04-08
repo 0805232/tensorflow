@@ -433,12 +433,18 @@ class RepeatDatasetOp::Dataset : public DatasetBase {
         TF_RETURN_IF_ERROR(
             input_impl_->GetNext(ctx, out_tensors, end_of_sequence));
         DCHECK(!*end_of_sequence || out_tensors->empty());
-        if (first_call_ && *end_of_sequence && ctx->split_providers().empty()) {
+        if (first_call_ && *end_of_sequence) {
           // If the first call to GetNext() fails because the end of sequence
           // has been reached, we return EOF unless it repeats a tf.data service
           // dataset, where the repeated elements are non-deterministic.
           // Otherwise, this iterator could loop infinitely.
-          if (!has_data_service_input_) {
+          bool skip_empty_dataset =
+              ctx->split_providers().empty() && !has_data_service_input_;
+          const Options& options = dataset()->options();
+          skip_empty_dataset =
+              skip_empty_dataset ||
+              options.service_options().take_splits_on_dispatcher();
+          if (skip_empty_dataset) {
             input_impl_.reset();
             return absl::OkStatus();
           }

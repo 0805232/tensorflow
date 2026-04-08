@@ -22,6 +22,11 @@ The TensorBoard dependency is no longer included by default. If you use `tf.summ
 * `tf.lite`
     * Adds support for QUI4 (Quantized Unsigned 4-bit) in Dequantize operator.
     * Adds support for FP16 and BF16 in Unpack operator.
+* `tf.data`
+    * Adds an option to enforce the tf.data service dispatcher to take a
+      specified number of splits for datasets with `.take(N)`. If enabled, the
+      tf.data service dispatcher dispatches N splits. By default, each worker
+      takes N elements, and the dataset produces N * num_workers elements.
 
 ### Bug Fixes and Other Changes
 

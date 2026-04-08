@@ -14,14 +14,20 @@ limitations under the License.
 ==============================================================================*/
 #include "tensorflow/core/kernels/data/take_dataset_op.h"
 
+#include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
+#include "absl/log/log.h"
 #include "absl/status/status.h"
 #include "tensorflow/core/data/name_utils.h"
+#include "tensorflow/core/framework/dataset.h"
+#include "tensorflow/core/framework/model.h"
 #include "tensorflow/core/framework/op_kernel.h"
-#include "tensorflow/core/framework/partial_tensor_shape.h"
 #include "tensorflow/core/framework/tensor.h"
 
 namespace tensorflow {
@@ -37,6 +43,54 @@ constexpr char kCurIndex[] = "i";
 constexpr char kInputImplEmpty[] = "input_impl_empty";
 constexpr char kEmptyTake[] = "EmptyTake";
 constexpr char kFiniteTake[] = "FiniteTake";
+
+class TakeSplitProvider : public SplitProvider {
+ public:
+  explicit TakeSplitProvider(std::unique_ptr<SplitProvider> split_provider,
+                             int64_t count)
+      : split_provider_(std::move(split_provider)), count_(count), i_(0) {}
+
+  int64_t Cardinality() const override {
+    if (split_provider_->Cardinality() == 0 || count_ == 0) {
+      return 0;
+    }
+    if (split_provider_->Cardinality() == kInfiniteCardinality) {
+      return count_;
+    }
+    if (split_provider_->Cardinality() < 0) {  // kUnknownCardinality
+      return split_provider_->Cardinality();
+    }
+    return std::min(split_provider_->Cardinality(), count_);
+  }
+
+  absl::Status GetNext(Tensor* split, bool* end_of_splits) override {
+    if (i_ >= count_) {
+      *end_of_splits = true;
+      return absl::OkStatus();
+    }
+    ++i_;
+    return split_provider_->GetNext(split, end_of_splits);
+  }
+
+  absl::Status Reset() override {
+    i_ = 0;
+    return split_provider_->Reset();
+  }
+  absl::Status Save(std::function<std::string(std::string)> full_name,
+                    IteratorStateWriter* writer) override {
+    return split_provider_->Save(full_name, writer);
+  }
+  absl::Status Restore(std::function<std::string(std::string)> full_name,
+                       IteratorStateReader* reader) override {
+    return split_provider_->Restore(full_name, reader);
+  }
+  void Cancel() override { split_provider_->Cancel(); }
+
+ private:
+  const std::unique_ptr<SplitProvider> split_provider_;
+  const int64_t count_;
+  int64_t i_ = 0;
+};
 
 TakeDataset::TakeDataset(OpKernelContext* ctx, int64_t count,
                          const DatasetBase* input)
@@ -241,6 +295,23 @@ void TakeDatasetOp::MakeDataset(OpKernelContext* ctx, DatasetBase* input,
   int64_t count;
   OP_REQUIRES_OK(ctx, ParseScalarArgument<int64_t>(ctx, kCount, &count));
   *output = new TakeDataset(ctx, count, input);
+}
+
+absl::Status TakeDataset::MakeSplitProviders(
+    std::vector<std::unique_ptr<SplitProvider>>* split_providers) const {
+  if (!options().service_options().take_splits_on_dispatcher()) {
+    return DatasetBase::MakeSplitProviders(split_providers);
+  }
+
+  std::vector<std::unique_ptr<SplitProvider>> input_split_providers;
+  TF_RETURN_IF_ERROR(input_->MakeSplitProviders(&input_split_providers));
+
+  split_providers->clear();
+  for (auto& split_provider : input_split_providers) {
+    split_providers->push_back(
+        std::make_unique<TakeSplitProvider>(std::move(split_provider), count_));
+  }
+  return absl::OkStatus();
 }
 
 namespace {

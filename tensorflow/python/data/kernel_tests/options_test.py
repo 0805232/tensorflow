@@ -169,6 +169,8 @@ class OptionsTest(test_base.DatasetTestBase, parameterized.TestCase):
     options.framework_type = ["TFDS", "TfGrain"]
     options.threading.max_intra_op_parallelism = 30
     options.threading.private_threadpool_size = 40
+    options.experimental_service.pinned = True
+    options.experimental_service.take_splits_on_dispatcher = True
     pb = options._to_proto()
     result = options_lib.Options()
     result._from_proto(pb)
@@ -235,6 +237,17 @@ class OptionsTest(test_base.DatasetTestBase, parameterized.TestCase):
     result.experimental_deterministic = True
     self.assertTrue(result.deterministic)
     self.assertEqual(result.deterministic, result.experimental_deterministic)
+
+  @combinations.generate(test_base.default_test_combinations())
+  def testServiceOptionsOverride(self):
+    options = options_lib.Options()
+    options.experimental_service.take_splits_on_dispatcher = True
+    pb = options._to_proto()
+    result = options_lib.Options()
+    result._from_proto(pb)
+    self.assertTrue(result.experimental_service.take_splits_on_dispatcher)
+    result.experimental_service.take_splits_on_dispatcher = False
+    self.assertFalse(result.experimental_service.take_splits_on_dispatcher)
 
   @combinations.generate(test_base.default_test_combinations())
   def testPersistenceOptionsSetOutsideFunction(self):

@@ -15,13 +15,16 @@ limitations under the License.
 #ifndef TENSORFLOW_CORE_KERNELS_DATA_TAKE_DATASET_OP_H_
 #define TENSORFLOW_CORE_KERNELS_DATA_TAKE_DATASET_OP_H_
 
-#include <cstdlib>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "absl/status/status.h"
 #include "tensorflow/core/framework/dataset.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/core/framework/tensor_shape.h"
+#include "tensorflow/core/framework/types.h"
 
 namespace tensorflow {
 namespace data {
@@ -37,6 +40,9 @@ class TakeDataset : public DatasetBase {
 
   std::unique_ptr<IteratorBase> MakeIteratorInternal(
       const std::string& prefix) const override;
+
+  absl::Status MakeSplitProviders(std::vector<std::unique_ptr<SplitProvider>>*
+                                      split_providers) const override;
 
   const DataTypeVector& output_dtypes() const override;
 

@@ -520,15 +520,29 @@ class ServiceOptions(options_lib.OptionsBase):
       ),
   )
 
+  take_splits_on_dispatcher = options_lib.create_option(
+      name="take_splits_on_dispatcher",
+      ty=bool,
+      docstring=(
+          "If true, the tf.data service dispatcher dispatches N splits for "
+          "datasets with `.take(N)`. By default, each worker takes N elements, "
+          "and the dataset produces N * num_workers elements."
+      ),
+  )
+
   def _to_proto(self):
     pb = dataset_options_pb2.ServiceOptions()
     if self.pinned is not None:
       pb.pinned = self.pinned
+    if self.take_splits_on_dispatcher is not None:
+      pb.take_splits_on_dispatcher = self.take_splits_on_dispatcher
     return pb
 
   def _from_proto(self, pb):
     if pb.WhichOneof("optional_pinned") is not None:
       self.pinned = pb.pinned
+    if pb.WhichOneof("optional_take_splits_on_dispatcher") is not None:
+      self.take_splits_on_dispatcher = pb.take_splits_on_dispatcher
 
 
 @deprecation.deprecated_endpoints("data.experimental.ThreadingOptions")

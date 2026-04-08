@@ -27,6 +27,7 @@ from tensorflow.python.data.experimental.service import server_lib
 from tensorflow.python.data.kernel_tests import test_base
 from tensorflow.python.data.kernel_tests import tf_record_test_base
 from tensorflow.python.data.ops import dataset_ops
+from tensorflow.python.data.ops import options as options_lib
 from tensorflow.python.data.ops import readers
 from tensorflow.python.framework import combinations
 from tensorflow.python.framework import dtypes
@@ -386,57 +387,56 @@ class DynamicShardingTest(data_service_test_base.TestBase,
                          combinations.combine(num_workers=[1, 3])))
   def testTake(self, num_workers):
     cluster = data_service_test_base.TestCluster(num_workers=num_workers)
-    a = dataset_ops.Dataset.range(3).repeat().take(5)
-    b = dataset_ops.Dataset.range(100, 103).repeat().take(5)
+    options = options_lib.Options()
+    options.experimental_service.take_splits_on_dispatcher = True
+
+    # TODO(b/500446898): Add a test for range(3).
+    a = dataset_ops.Dataset.range(100).with_options(options)
+    a = a.repeat().take(5)
+    b = dataset_ops.Dataset.range(100, 200).with_options(options)
+    b = b.repeat().take(5)
     ds = a.concatenate(b)
     ds = self._make_dynamic_sharding_dataset(ds, cluster)
 
-    assert_items_equal = num_workers > 1
-    if num_workers == 1:
-      expected = [0, 1, 2, 0, 1, 100, 101, 102, 100, 101]
-    else:
-      expected = [0, 1, 2] * 5 + [100, 101, 102] * 5
+    expected = [0, 1, 2, 3, 4, 100, 101, 102, 103, 104]
+    assert_count_equal = num_workers > 1
     self.assertDatasetProduces(
-        ds, expected, assert_items_equal=assert_items_equal
+        ds, expected, assert_items_equal=assert_count_equal
     )
 
   @combinations.generate(
       combinations.times(test_base.default_test_combinations(),
                          combinations.combine(num_workers=[1, 3])))
-  def testTakeWithRestartedWorker(self, num_workers):
+  def testTakeWithWorkerRestart(self, num_workers):
     cluster = data_service_test_base.TestCluster(num_workers=num_workers)
-    a = dataset_ops.Dataset.range(3).repeat()
-    b = dataset_ops.Dataset.range(100, 103).repeat()
-    a = a.apply(
-        data_service_ops.distribute(
-            data_service_ops.ShardingPolicy.DYNAMIC,
-            cluster.dispatcher_address(),
-            job_name="job_name",
-        )
-    )
-    b = b.apply(
-        data_service_ops.distribute(
-            data_service_ops.ShardingPolicy.DYNAMIC,
-            cluster.dispatcher_address(),
-            job_name="different_job_name",
-        )
-    )
-    a = a.take(5)
-    b = b.take(5)
+    options = options_lib.Options()
+    options.experimental_service.take_splits_on_dispatcher = True
+
+    a = dataset_ops.Dataset.range(100).with_options(options)
+    a = a.repeat().take(5)
+    b = dataset_ops.Dataset.range(100, 200).with_options(options)
+    b = b.repeat().take(5)
     ds = a.concatenate(b)
+    ds = self._make_dynamic_sharding_dataset(ds, cluster)
 
     output = []
     get_next = self.getNext(ds)
     for _ in range(5):
       output.append(self.evaluate(get_next()))
-    cluster.workers[0].restart(use_same_port=True)
 
+    cluster.workers[0].restart(use_same_port=True)
     output.extend(self.getIteratorOutput(get_next))
     logging.info("Dataset output: %s", output)
 
-    # 5 elements from each of a and b.
-    self.assertTrue(all(x < 100 for x in output[:5]))
-    self.assertTrue(all(x >= 100 for x in output[5:]))
+    # At-most-once visitation: Each element is produced at most once. Elements
+    # may be lost due to worker restart.
+    self.assertLessEqual(len(output), 10)
+
+    if num_workers == 1:
+      # 5 elements from each of `a` and `b`. May be unordered when
+      # num_workers > 1.
+      self.assertTrue(all(x < 100 for x in output[:5]))
+      self.assertTrue(all(x >= 100 for x in output[5:]))
 
   @combinations.generate(
       combinations.times(test_base.default_test_combinations(),

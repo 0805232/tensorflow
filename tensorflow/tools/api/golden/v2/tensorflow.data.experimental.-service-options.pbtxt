@@ -7,6 +7,10 @@ tf_class {
     name: "pinned"
     mtype: "<type \'property\'>"
   }
+  member {
+    name: "take_splits_on_dispatcher"
+    mtype: "<type \'property\'>"
+  }
   member_method {
     name: "__init__"
     argspec: "args=[\'self\'], varargs=None, keywords=None, defaults=None"
