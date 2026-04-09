@@ -2724,6 +2724,8 @@ xla_test(
         ":hlo_pjrt_test_base",
         ":xla_internal_test_main",
         "//xla:error_spec",
+        "//xla:literal",
+        "//xla:literal_util",
         "//xla:shape_util",
         "//xla:xla_data_proto_cc",
         "//xla/hlo/builder:xla_builder",

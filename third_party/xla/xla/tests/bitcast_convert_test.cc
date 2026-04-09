@@ -17,12 +17,15 @@ limitations under the License.
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "xla/tests/xla_test_backend_predicates.h"
 #include "absl/strings/string_view.h"
 #include "xla/error_spec.h"
 #include "xla/hlo/builder/xla_builder.h"
+#include "xla/literal.h"
+#include "xla/literal_util.h"
 #include "xla/shape_util.h"
 #include "xla/tests/client_library_test_runner_mixin.h"
 #include "xla/tests/hlo_pjrt_interpreter_reference_mixin.h"
@@ -202,9 +205,6 @@ ENTRY main {
 }
 
 TEST_F(BitcastConvertHloTest, FourPredToF32) {
-  if (test::DeviceTypeIs({test::kTpu})) {
-    GTEST_SKIP();
-  }
   absl::string_view hlo_string = R"(
 HloModule bitcast_to_smaller
 
@@ -225,10 +225,13 @@ ENTRY main {
   ROOT out = pred[10] bitcast-convert(p)
 }
 )";
-  if (test::DeviceTypeIs({test::kTpu})) {
-    GTEST_SKIP();
-  }
-  EXPECT_TRUE(RunAndCompare(hlo_string, ErrorSpec{1e-5, 1e-5}));
+  auto module = this->ParseAndReturnVerifiedModule(hlo_string).value();
+  // Use only 0 and 1 values to avoid undefined behavior for bitcast to pred.
+  // Otherwise, since it's generated randomly, there's a chance we get values
+  // outside {0, 1}.
+  Literal arg = LiteralUtil::CreateR1<int8_t>({0, 0, 0, 1, 0, 1, 0, 1, 0, 0});
+  std::vector<const Literal*> args = {&arg};
+  EXPECT_TRUE(RunAndCompare(std::move(module), args, ErrorSpec{1e-5, 1e-5}));
 }
 
 }  // namespace
