@@ -19,6 +19,8 @@ Adapted from Tangent.
 
 import enum
 
+import sys
+
 # pylint:disable=g-bad-import-order
 
 import gast
@@ -136,9 +138,10 @@ def setanno(node, key, value, field_name='___pyct_anno'):
   setattr(node, field_name, annotations)
   annotations[key] = value
 
-  # So that the annotations survive gast_to_ast() and ast_to_gast()
-  if field_name not in node._fields:
-    node._fields += (field_name,)
+  if sys.version_info < (3, 12):
+    # So that the annotations survive gast_to_ast() and ast_to_gast()
+    if field_name not in node._fields:
+      node._fields += (field_name,)
 
 
 def delanno(node, key, field_name='___pyct_anno'):
@@ -146,7 +149,8 @@ def delanno(node, key, field_name='___pyct_anno'):
   del annotations[key]
   if not annotations:
     delattr(node, field_name)
-    node._fields = tuple(f for f in node._fields if f != field_name)
+    if sys.version_info < (3, 12):
+      node._fields = tuple(f for f in node._fields if f != field_name)
 
 
 def copyanno(from_node, to_node, key, field_name='___pyct_anno'):
