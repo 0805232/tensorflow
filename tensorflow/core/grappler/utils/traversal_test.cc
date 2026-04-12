@@ -143,7 +143,7 @@ TEST(TraversalTest, OutputDfsWithLoop) {
 
   std::vector<std::string> pre_order;
   std::vector<std::string> post_order;
-  std::vector<string> back_edges;
+  std::vector<std::string> back_edges;
 
   GraphTopologyView graph_view;
   TF_CHECK_OK(graph_view.InitializeFromGraph(graph));
