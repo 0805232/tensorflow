@@ -694,6 +694,52 @@ ENTRY %module {
                                         new_instruction_sequence, "ag1"));
 }
 
+TEST_F(LatencyHidingSchedulerTest, AsyncDoneDelayRule) {
+  absl::string_view hlo_string = R"(
+HloModule module, is_scheduled=true
+
+ENTRY %module {
+  p0 = f32[8,256,256]{2,1,0} parameter(0)
+  p1 = f32[8,256,256]{2,1,0} parameter(1)
+  
+  %ag-start = (f32[8,256,256], f32[16,256,256]) all-gather-start(p0), replica_groups={{0,1}}, dimensions={0},
+    metadata={op_type="AllGather" op_name="ag0"},
+    frontend_attributes={scheduler_hint="force_delay_async"}
+    
+  %ag-start.2 = (f32[8,256,256], f32[16,256,256]) all-gather-start(p1), replica_groups={{0,1}}, dimensions={0},
+    metadata={op_type="AllGather" op_name="ag1"}
+    
+  %ag-done.2 = f32[16,256,256] all-gather-done(%ag-start.2),
+    metadata={op_type="AllGather" op_name="ag1"}
+    
+  %ag-done = f32[16,256,256] all-gather-done(%ag-start),
+    metadata={op_type="AllGather" op_name="ag0"}
+    
+  ROOT a2 = f32[16,256,256]{2,1,0} add(%ag-done, %ag-done.2)
+}
+)";
+
+  {
+    TF_ASSERT_OK_AND_ASSIGN(auto hlo_module, ParseHloText(hlo_string));
+    HloSchedule& module_schedule = hlo_module->schedule();
+    HloComputation* entry_computation = hlo_module->entry_computation();
+
+    auto sched_config = GetDefaultSchedConfig();
+
+    TF_EXPECT_OK(RunScheduler(hlo_module.get(), sched_config));
+    std::vector<HloInstruction*> new_instruction_sequence =
+        module_schedule.sequence(entry_computation).instructions();
+
+    // We expect ag-done to be scheduled LATER by bottom-up algorithm (executes
+    // EARLIER). So ag-done should appear BEFORE ag-done.2 in the final
+    // schedule.
+    EXPECT_LT(GetOpcodeIndexUsingMetaData(HloOpcode::kAllGatherDone,
+                                          new_instruction_sequence, "ag0"),
+              GetOpcodeIndexUsingMetaData(HloOpcode::kAllGatherDone,
+                                          new_instruction_sequence, "ag1"));
+  }
+}
+
 TEST_F(LatencyHidingSchedulerTest, AllReduceAsyncBalance) {
   absl::string_view hlo_string = R"(
 HloModule module, is_scheduled=true
