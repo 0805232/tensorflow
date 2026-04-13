@@ -693,6 +693,7 @@ cc_library(
         "@llvm-project//mlir:Parser",
         "@llvm-project//mlir:Pass",
         "@llvm-project//mlir:Support",
+        "@shardy//shardy/dialect/sdy/ir:dialect",
         "@stablehlo//:version",
     ],
 )
@@ -904,6 +905,7 @@ cc_library(
         "@com_google_protobuf//:protobuf_lite",
         "@riegeli//riegeli/bytes:cord_writer",
         "@riegeli//riegeli/messages:serialize_message",
+        "@shardy//shardy/dialect/sdy/ir:dialect",
         "@stablehlo//:version",
         "@tsl//tsl/platform:protobuf",
     ],
