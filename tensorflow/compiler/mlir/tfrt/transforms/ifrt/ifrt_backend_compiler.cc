@@ -37,6 +37,8 @@ limitations under the License.
 #include "mlir/IR/Value.h"  // from @llvm-project
 #include "mlir/IR/Verifier.h"  // from @llvm-project
 #include "mlir/Support/LogicalResult.h"  // from @llvm-project
+#include "mlir/Support/WalkResult.h"  // from @llvm-project
+#include "tensorflow/compiler/mlir/tensorflow/ir/host_runtime/tfrt_ops.h"
 #include "tensorflow/compiler/mlir/tensorflow/utils/dump_mlir_util.h"
 #include "tensorflow/compiler/mlir/tensorflow/utils/error_util.h"
 #include "tensorflow/compiler/mlir/tensorflow/utils/visitor.h"
@@ -200,10 +202,21 @@ absl::Status IfrtBackendCompiler::CompileTensorflow(
   }
 
   // Extract TPU program for IFRT call.
+  bool enable_async_ifrt =
+      model_context.graph_execution_options().compile_options.enable_async_ifrt;
+
+  // If the module contains PwStreamResultsOp, we disable async execution.
+  // Using async IFRT with interactive/chunked streaming operations via host
+  // callbacks creates out-of-order race conditions. Attempting to force
+  // execution ordering via graph-level data dependencies on the IFRT future
+  // leads to a circular deadlock where intermediate streaming callbacks are
+  // frozen waiting for the entire program to wrap up. Therefore, compiling
+  // to a synchronous blocking kernel is the most robust solution to uphold
+  // causal stream ordering.
+  module.walk([&](mlir::TF::PwStreamResultsOp) { enable_async_ifrt = false; });
+
   TF_RETURN_IF_ERROR(CompileTensorflowForIfrtServing(
-      model_context.name(), **ifrt_model_context, module,
-      model_context.graph_execution_options()
-          .compile_options.enable_async_ifrt));
+      model_context.name(), **ifrt_model_context, module, enable_async_ifrt));
 
   if (VLOG_IS_ON(1)) {
     tensorflow::DumpMlirOpToFile("after_ifrt_outlining", module);
