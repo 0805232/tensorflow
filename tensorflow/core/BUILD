@@ -1836,7 +1836,10 @@ tf_cuda_library(
         "//tensorflow/core/public:session.h",
     ],
     copts = tf_copts(),
-    visibility = ["//visibility:public"],
+    visibility = [
+        "//third_party/odml/litert/litert/compiler/mlir:__pkg__",
+        "//visibility:public",
+    ],
     deps = ["//tensorflow/core/common_runtime:core_cpu_base_no_ops"] + if_static([
         ":function_ops_op_lib",
         ":functional_grad",
