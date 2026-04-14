@@ -57,7 +57,7 @@ class MockOp : public OpKernel {
 
   void Compute(OpKernelContext* ctx) override {
     OP_REQUIRES(ctx, compute_ != nullptr,
-                absl::FailedPreconditionError("Compute() is not set"));
+                errors::FailedPrecondition("Compute() is not set"));
     compute_(ctx);
   }
 

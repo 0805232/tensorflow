@@ -146,8 +146,7 @@ absl::Status FindSaveOp(const Graph* graph, Node** save_op,
     if (node->type_string() == "SaveV2") {
       // We found multiple save ops.
       if (*found) {
-        return absl::InvalidArgumentError(
-            "Input graph has multiple SaveV2 ops.");
+        return errors::InvalidArgument("Input graph has multiple SaveV2 ops.");
       }
       *save_op = node;
       *found = true;
@@ -258,8 +257,7 @@ absl::Status AddRestoreVariableSubgraphs(
   absl::string_view name_prefix = GetNodeNamePrefix(save_op);
   Node* restore_all = FindRestoreAllOp(graph, name_prefix);
   if (restore_all == nullptr) {
-    return absl::InvalidArgumentError(
-        "graph has SaveOp, but no restore_all NoOp");
+    return errors::InvalidArgument("graph has SaveOp, but no restore_all NoOp");
   }
   const std::string restore_op_name = absl::StrCat(name_prefix, "/RestoreV2");
   const std::string assign_op_name = absl::StrCat(name_prefix, "/Assign");
@@ -561,8 +559,7 @@ absl::Status MakeQuantizeOp(Graph* graph, const std::string& name_prefix,
                            .Attr("num_bits", edge.num_bits)
                            .Finalize(graph, convert_node));
   } else {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Unknown quant op type: ", quant_op_type));
+    return errors::InvalidArgument("Unknown quant op type: ", quant_op_type);
   }
   return absl::OkStatus();
 }
@@ -603,12 +600,12 @@ absl::Status DoQuantizeTraining(int32_t num_bits,
                                 const std::string& quant_op_type,
                                 Graph* graph) {
   if (graph == nullptr) {
-    return absl::InvalidArgumentError("Cannot accept empty graph pointer.");
+    return errors::InvalidArgument("Cannot accept empty graph pointer.");
   }
 
   if (num_bits < 1 || num_bits > 63) {
-    return absl::OutOfRangeError(
-        absl::StrCat("num_bits should be in range [1, 63] but is: ", num_bits));
+    return errors::OutOfRange("num_bits should be in range [1, 63] but is: ",
+                              num_bits);
   }
   int potential_input = 0;
   std::vector<EdgeToConvert> target_edges;
@@ -644,12 +641,12 @@ absl::Status DoQuantizeTraining(int32_t num_bits,
             // Unknown op is considered as input.
             potential_input++;
             if (potential_input > kAllowedInputs) {
-              return absl::UnimplementedError(absl::StrCat(
+              return errors::Unimplemented(
                   "Found an unknown op: ", edge->src()->name(),
                   " with type: ", edge->src()->type_string(),
                   "; Unknown ops are considered as model input for now and "
                   "only ",
-                  kAllowedInputs, " inputs are supported currently."));
+                  kAllowedInputs, " inputs are supported currently.");
             }
           }
 
@@ -687,7 +684,7 @@ absl::Status DoQuantizeTrainingOnSerializedGraphDef(
   // First create the graph from the GraphDef.
   GraphDef input_graphdef;
   if (!ParseProtoUnlimited(&input_graphdef, input_graph_string)) {
-    return absl::InvalidArgumentError(
+    return errors::InvalidArgument(
         "input_graph_string is not a serialized GraphDef protocol buffer");
   }
   GraphDef output_graphdef;
@@ -695,7 +692,7 @@ absl::Status DoQuantizeTrainingOnSerializedGraphDef(
       input_graphdef, num_bits, quant_op_type, &output_graphdef));
 
   if (!output_graphdef.SerializeToString(result_graph_string)) {
-    return absl::InternalError(
+    return errors::Internal(
         "quantize training transformation resulted in invalid GraphDef");
   }
   return absl::OkStatus();

@@ -64,7 +64,7 @@ absl::Status DebuggerStateRegistry::CreateState(
     const DebugOptions& debug_options,
     std::unique_ptr<DebuggerStateInterface>* state) {
   if (factory_ == nullptr || *factory_ == nullptr) {
-    return absl::InternalError(
+    return errors::Internal(
         "Creation of debugger state failed. "
         "It appears that TFDBG is not linked in this TensorFlow build.");
   } else {
@@ -85,7 +85,7 @@ absl::Status DebugGraphDecoratorRegistry::CreateDecorator(
     const DebugOptions& options,
     std::unique_ptr<DebugGraphDecoratorInterface>* decorator) {
   if (factory_ == nullptr || *factory_ == nullptr) {
-    return absl::InternalError(
+    return errors::Internal(
         "Creation of graph decorator failed. "
         "It appears that TFDBG is not linked in this TensorFlow build.");
   } else {

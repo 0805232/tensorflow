@@ -129,12 +129,12 @@ std::string TpuPodState::DebugString() const {
 
 absl::Status GetTPUPodState(const ResourceMgr* rmgr, TpuPodState** pod_state) {
   if (!rmgr) {
-    return absl::InternalError("No resource manager.");
+    return errors::Internal("No resource manager.");
   }
   if (!rmgr->Lookup(rmgr->default_container(), kTpuPodStateResourceName,
                     pod_state)
            .ok()) {
-    return absl::FailedPreconditionError(
+    return errors::FailedPrecondition(
         "The TPU system has not been initialized.");
   }
   return absl::OkStatus();

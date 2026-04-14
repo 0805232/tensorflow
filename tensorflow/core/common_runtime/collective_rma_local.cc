@@ -34,8 +34,8 @@ void CollectiveRemoteAccessLocal::RecvFromPeer(
           << key;
   if (!peer_is_local) {
     done(
-        absl::InternalError("CollectiveRemoteAccessLocal::RecvFromPeer "
-                            "called with peer_is_local=false"));
+        errors::Internal("CollectiveRemoteAccessLocal::RecvFromPeer "
+                         "called with peer_is_local=false"));
     return;
   }
 
@@ -53,7 +53,7 @@ void CollectiveRemoteAccessLocal::RecvFromPeer(
     absl::Status s = status;
     if (s.ok()) {
       if (hook == nullptr) {
-        s = absl::InternalError("Invalid null hook in ConsumeBuf callback");
+        s = errors::Internal("Invalid null hook in ConsumeBuf callback");
       }
     } else {
       if (hook != nullptr) {
@@ -111,7 +111,7 @@ void CollectiveRemoteAccessLocal::CheckPeerHealth(const std::string& peer_task,
                                                   int64_t timeout_in_ms,
                                                   const StatusCallback& done) {
   // Assume local devices are always healthy.
-  done(absl::InternalError(
+  done(errors::Internal(
       "CheckPeerHealth is not supposed to be called for local collectives"));
 }
 

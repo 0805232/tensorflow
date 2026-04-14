@@ -158,8 +158,7 @@ const std::string& MutableProtoRunStepRequest::feed_name(size_t i) const {
 absl::Status MutableProtoRunStepRequest::FeedValue(size_t i,
                                                    Tensor* out_tensor) const {
   if (!ParseTensorProtoToTensor(request_.feed(i).tensor(), out_tensor)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TensorProto for feed value ", i));
+    return errors::InvalidArgument("Invalid TensorProto for feed value ", i);
   } else {
     return absl::OkStatus();
   }
@@ -251,8 +250,7 @@ const std::string& ProtoRunStepRequest::feed_name(size_t i) const {
 absl::Status ProtoRunStepRequest::FeedValue(size_t i,
                                             Tensor* out_tensor) const {
   if (!ParseTensorProtoToTensor(request_->feed(i).tensor(), out_tensor)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TensorProto for feed value ", i));
+    return errors::InvalidArgument("Invalid TensorProto for feed value ", i);
   } else {
     return absl::OkStatus();
   }
@@ -362,8 +360,7 @@ absl::Status InMemoryRunGraphRequest::AddSendFromRunCallableRequest(
     const std::string& send_key) {
   Tensor tensor;
   if (!ParseTensorProtoToTensor(run_callable_request.feed(i), &tensor)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TensorProto for feed value ", i));
+    return errors::InvalidArgument("Invalid TensorProto for feed value ", i);
   }
   sends_.emplace_back(send_key, std::move(tensor));
   return absl::OkStatus();
@@ -488,8 +485,7 @@ const std::string& MutableProtoRunGraphRequest::send_key(size_t i) const {
 absl::Status MutableProtoRunGraphRequest::SendValue(size_t i,
                                                     Tensor* out_tensor) const {
   if (!ParseTensorProtoToTensor(request_.send(i).tensor(), out_tensor)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TensorProto for feed value ", i));
+    return errors::InvalidArgument("Invalid TensorProto for feed value ", i);
   } else {
     return absl::OkStatus();
   }
@@ -593,8 +589,7 @@ const std::string& ProtoRunGraphRequest::send_key(size_t i) const {
 absl::Status ProtoRunGraphRequest::SendValue(size_t i,
                                              Tensor* out_tensor) const {
   if (!ParseTensorProtoToTensor(request_->send(i).tensor(), out_tensor)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TensorProto for feed value ", i));
+    return errors::InvalidArgument("Invalid TensorProto for feed value ", i);
   } else {
     return absl::OkStatus();
   }
@@ -701,8 +696,7 @@ absl::Status OwnedProtoRunGraphResponse::RecvValue(size_t i,
 absl::Status OwnedProtoRunGraphResponse::RecvValue(size_t i,
                                                    Tensor* out_tensor) {
   if (!ParseTensorProtoToTensor(response_.recv(i).tensor(), out_tensor)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TensorProto for recv value ", i));
+    return errors::InvalidArgument("Invalid TensorProto for recv value ", i);
   } else {
     return absl::OkStatus();
   }
@@ -775,8 +769,7 @@ absl::Status NonOwnedProtoRunGraphResponse::RecvValue(size_t i,
 absl::Status NonOwnedProtoRunGraphResponse::RecvValue(size_t i,
                                                       Tensor* out_tensor) {
   if (!ParseTensorProtoToTensor(response_->recv(i).tensor(), out_tensor)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TensorProto for recv value ", i));
+    return errors::InvalidArgument("Invalid TensorProto for recv value ", i);
   } else {
     return absl::OkStatus();
   }
@@ -885,8 +878,7 @@ const std::string& OwnedProtoRunStepResponse::tensor_name(size_t i) const {
 absl::Status OwnedProtoRunStepResponse::TensorValue(size_t i,
                                                     Tensor* out_tensor) const {
   if (!ParseTensorProtoToTensor(response_.tensor(i).tensor(), out_tensor)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TensorProto for fetch value ", i));
+    return errors::InvalidArgument("Invalid TensorProto for fetch value ", i);
   } else {
     return absl::OkStatus();
   }
@@ -939,8 +931,7 @@ const std::string& NonOwnedProtoRunStepResponse::tensor_name(size_t i) const {
 absl::Status NonOwnedProtoRunStepResponse::TensorValue(
     size_t i, Tensor* out_tensor) const {
   if (!ParseTensorProtoToTensor(response_->tensor(i).tensor(), out_tensor)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TensorProto for fetch value ", i));
+    return errors::InvalidArgument("Invalid TensorProto for fetch value ", i);
   } else {
     return absl::OkStatus();
   }

@@ -58,7 +58,7 @@ class FunctionArgsInterface {
 #if !defined(IS_MOBILE_PLATFORM)
   virtual absl::Status GetRemoteArg(const FunctionArgIndex& index,
                                     eager::RemoteTensorHandle* val) const {
-    return absl::UnimplementedError(
+    return errors::Unimplemented(
         "Serializing a remote argument is not implemented.");
   }
 #endif  // IS_MOBILE_PLATFORM

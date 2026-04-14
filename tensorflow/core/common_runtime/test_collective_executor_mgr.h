@@ -43,25 +43,25 @@ class TestParamResolver : public ParamResolverInterface {
   void CompleteParamsAsync(const DeviceAttributes& device, CollectiveParams* cp,
                            CancellationManager* cancel_mgr,
                            const StatusCallback& done) override {
-    done(absl::InternalError("Unimplemented"));
+    done(errors::Internal("Unimplemented"));
   }
 
   void CompleteGroupAsync(const DeviceAttributes& device,
                           CollGroupParams* group_params,
                           CancellationManager* cancel_mgr,
                           const StatusCallback& done) override {
-    done(absl::InternalError("Unimplemented"));
+    done(errors::Internal("Unimplemented"));
   }
 
   void CompleteInstanceAsync(const CompleteInstanceRequest* request,
                              CompleteInstanceResponse* response,
                              CancellationManager* cancel_mgr,
                              const StatusCallback& done) override {
-    done(absl::InternalError("Unimplemented"));
+    done(errors::Internal("Unimplemented"));
   }
 
   absl::Status LookupGroup(int32_t group_key, CollGroupParams* group) override {
-    return absl::InternalError("Unimplemented");
+    return errors::Internal("Unimplemented");
   }
 
   void StartAbort(const absl::Status& s) override {}
@@ -128,12 +128,12 @@ class TestCollectiveExecutorMgr : public CollectiveExecutorMgrInterface {
   void GetStepSequenceAsync(const GetStepSequenceRequest* request,
                             GetStepSequenceResponse* response,
                             const StatusCallback& done) override {
-    done(absl::InternalError("unimplemented"));
+    done(errors::Internal("unimplemented"));
   }
 
   void RefreshStepIdSequenceAsync(int64_t graph_key,
                                   const StatusCallback& done) override {
-    done(absl::InternalError("unimplemented"));
+    done(errors::Internal("unimplemented"));
   }
 
   int64_t NextStepId(int64_t graph_key) override {

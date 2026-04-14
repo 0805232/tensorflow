@@ -74,10 +74,9 @@ void SameWorkerRecvDone(const DeviceMgr* device_mgr,
   // checks happen inside CopyTensor::ViaDMA.
   if (!DataTypeCanUseMemcpy(in.dtype()) && in.dtype() != DT_VARIANT &&
       in.dtype() != DT_RESOURCE) {
-    done(absl::InvalidArgumentError(
-        absl::StrCat("Non-DMA-safe ", DataTypeString(in.dtype()),
-                     " tensor may not be copied from/to a device. Key: ",
-                     parsed.FullKey())));
+    done(errors::InvalidArgument(
+        "Non-DMA-safe ", DataTypeString(in.dtype()),
+        " tensor may not be copied from/to a device. Key: ", parsed.FullKey()));
     return;
   }
 
@@ -122,9 +121,9 @@ void SameWorkerRecvDone(const DeviceMgr* device_mgr,
     Tensor copy(out_allocator, in.dtype(), in.shape(), aa);
     *out = copy;
     if (in.shape().num_elements() > 0 && out->data() == nullptr) {
-      done(absl::ResourceExhaustedError(absl::StrCat(
+      done(tensorflow::errors::ResourceExhausted(
           "SameWorkerRecvDone unable to allocate output tensor. Key: ",
-          parsed.FullKey())));
+          parsed.FullKey()));
       return;
     }
   }

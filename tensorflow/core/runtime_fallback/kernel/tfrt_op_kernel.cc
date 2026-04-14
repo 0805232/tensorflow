@@ -42,8 +42,7 @@ TFRTOpKernelConstruction::TFRTOpKernelConstruction(
     : attributes_(std::move(attributes)) {}
 
 absl::Status MissingAttributeError(absl::string_view attr_name) {
-  return absl::InvalidArgumentError(
-      absl::StrCat("Missing attribute: ", attr_name));
+  return errors::InvalidArgument("Missing attribute: ", attr_name);
 }
 
 template <>
@@ -290,15 +289,15 @@ absl::Status ValidKernelAttr(absl::string_view kernel_class_name,
     DataType type;
     absl::Status s = construction->GetAttr(attr_name, &type);
     if (!s.ok()) {
-      return absl::InvalidArgumentError(absl::StrCat(
+      return errors::InvalidArgument(
           "Kernel ", kernel_class_name,
-          " has constraint for unset tfdtype attribute ", attr_name, "."));
+          " has constraint for unset tfdtype attribute ", attr_name, ".");
     }
     if (type != constraint.second) {
-      return absl::InvalidArgumentError(absl::StrCat(
+      return errors::InvalidArgument(
           "Kernel ", kernel_class_name, " with type constraint ", attr_name,
           ": ", DataTypeString(constraint.second),
-          " does not match attribute type ", DataTypeString(type), "."));
+          " does not match attribute type ", DataTypeString(type), ".");
     }
   }
   return absl::OkStatus();
@@ -310,8 +309,8 @@ std::unique_ptr<TFRTOpKernel> TFRTOpKernelFactories::CreateKernel(
   auto it = factories_.find(std::string(kernel_class_name));
   if (it == factories_.end()) {
     // Could not find kernel in the registry
-    op_kernel_construction->CtxFailure(absl::NotFoundError(absl::StrCat(
-        "Could not find kernel ", kernel_class_name, " in the registry.")));
+    op_kernel_construction->CtxFailure(errors::NotFound(
+        "Could not find kernel ", kernel_class_name, " in the registry."));
     return std::unique_ptr<TFRTOpKernel>(nullptr);
   }
   absl::Status status;

@@ -44,8 +44,7 @@ class MasterInterface {
   virtual absl::Status PartialRunSetup(CallOptions* call_options,
                                        const PartialRunSetupRequest* request,
                                        PartialRunSetupResponse* response) {
-    return absl::UnimplementedError(
-        "Partial run not implemented for this master");
+    return errors::Unimplemented("Partial run not implemented for this master");
   }
 
   virtual absl::Status RunStep(CallOptions* call_options,

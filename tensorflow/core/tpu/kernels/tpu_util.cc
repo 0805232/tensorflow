@@ -42,8 +42,7 @@ absl::StatusOr<TpuCompilationCacheKey> ParseCompilationCacheKey(
     // No guaranteed_const.
     return TpuCompilationCacheKey(key);
   } else if (splits.size() != 3) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Invalid TPU compilation cache key:", key));
+    return errors::InvalidArgument("Invalid TPU compilation cache key:", key);
   }
 
   TpuCompilationCacheKey parsed_key(splits.at(0));
@@ -72,7 +71,7 @@ absl::Status ShapeTensorToTensorShape(const Tensor& tensor,
                                       TensorShape* shape) {
   if (tensor.dtype() != DT_INT64 ||
       !TensorShapeUtils::IsVector(tensor.shape())) {
-    return absl::InvalidArgumentError("Shape tensor must be an int64 vector.");
+    return errors::InvalidArgument("Shape tensor must be an int64 vector.");
   }
   const int64_t rank = tensor.NumElements();
   auto tensor_dims = tensor.flat<int64_t>();

@@ -214,11 +214,11 @@ template <typename ExecutableType>
 inline absl::Status EligibleToPersist(DeviceCompileState compile_state,
                                       const ExecutableType* executable) {
   if (compile_state != DeviceCompileState::kCompiled) {
-    return absl::FailedPreconditionError(
+    return errors::FailedPrecondition(
         "Cache entry to serialize is not compiled.");
   }
   if (executable == nullptr) {
-    return absl::FailedPreconditionError(
+    return errors::FailedPrecondition(
         "LocalExecutable not found for cache entry to serialize.");
   }
   return absl::OkStatus();
@@ -531,7 +531,7 @@ absl::Status DeviceCompiler<ExecutableType, ClientType>::CompileImpl(
                      absl::StrAppend(out, " arg: ", arg.HumanString());
                    });
 
-    return absl::InternalError("XLA compilation disabled");
+    return errors::Internal("XLA compilation disabled");
   }
 
   if (state == DeviceCompileState::kUncompiled) {

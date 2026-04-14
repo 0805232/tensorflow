@@ -205,15 +205,14 @@ absl::Status ProcessFunctionLibraryRuntime::GetRetTypes(
   if (flr != nullptr) {
     return flr->GetRetTypes(h, ret_types);
   }
-  return absl::InvalidArgumentError(absl::StrCat("Handle ", h, " not found."));
+  return errors::InvalidArgument("Handle ", h, " not found.");
 }
 
 absl::Status ProcessFunctionLibraryRuntime::GetDeviceIncarnation(
     const std::string& device_name, int64_t* incarnation) const {
   FunctionLibraryRuntime* flr = GetFLR(device_name);
   if (flr == nullptr) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Device name: ", device_name, " not found."));
+    return errors::InvalidArgument("Device name: ", device_name, " not found.");
   }
   *incarnation = flr->device()->attributes().incarnation();
   return absl::OkStatus();
@@ -224,8 +223,7 @@ absl::Status ProcessFunctionLibraryRuntime::GetDeviceContext(
   *device_context = nullptr;
   FunctionLibraryRuntime* flr = GetFLR(device_name);
   if (flr == nullptr) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Device name: ", device_name, " not found."));
+    return errors::InvalidArgument("Device name: ", device_name, " not found.");
   }
   Device* device = flr->device();
   std::string device_type = device->parsed_name().type;
@@ -242,9 +240,9 @@ absl::Status ProcessFunctionLibraryRuntime::GetDeviceContext(
     }
   }
 
-  return absl::InternalError(absl::StrCat(
-      "Device type: ", device_type, " is currently unsupported for remote ",
-      "function executions"));
+  return errors::Internal("Device type: ", device_type,
+                          " is currently unsupported for remote ",
+                          "function executions");
 }
 
 void ProcessFunctionLibraryRuntime::InitializeDeviceAndFlr() {
@@ -436,7 +434,7 @@ absl::Status FunctionRetsToTensors(
     std::vector<Tensor>* tensors) {
   for (const auto& ret : *function_rets) {
     if (ret.index() != 0) {
-      return absl::InternalError(
+      return errors::Internal(
           "Expect a Tensor as a function output but got a TensorShape.");
     }
     // NOLINTNEXTLINE
@@ -541,9 +539,9 @@ absl::Status ProcessFunctionLibraryRuntime::InstantiateMultiDevice(
     // different devices depending on the `PartitionedCallOp` device.
     FunctionLibraryRuntime* flr = GetFLR(options.target);
     if (flr == nullptr) {
-      return absl::InvalidArgumentError(absl::StrCat(
+      return errors::InvalidArgument(
           "Cannot instantiate multi-device function with target device ",
-          options.target));
+          options.target);
     }
     default_device = flr->device();
   }
@@ -848,8 +846,8 @@ absl::Status ProcessFunctionLibraryRuntime::GetOutputDevices(
     std::vector<Device*>* output_devices) const {
   MultiDeviceFunctionData* data = IsMultiDevice(handle);
   if (data == nullptr) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("Failed for find multi-device function handle ", handle));
+    return errors::InvalidArgument(
+        "Failed for find multi-device function handle ", handle);
   }
 
   for (const auto& pair : data->glue_) {
@@ -899,7 +897,7 @@ absl::Status ProcessFunctionLibraryRuntime::PrepareRunMultiDevice(
     // creates rendezvous, etc.
     // Letting create_rendezvous through will do the wrong thing - each
     // component function will get a separate rendezvous created by its FLR.
-    return absl::InternalError(
+    return errors::Internal(
         "Cannot call ProcessFunctionLibraryRuntime::Run with "
         "create_rendezvous=true. Please run the function "
         "using FunctionLibraryRuntime::Run");
@@ -907,17 +905,16 @@ absl::Status ProcessFunctionLibraryRuntime::PrepareRunMultiDevice(
 
   *data = IsMultiDevice(handle);
   if (*data == nullptr) {
-    return absl::NotFoundError(
-        absl::StrCat("Multi-device function handle ", handle,
-                     "not found. Was the function instantiated?"));
+    return errors::NotFound("Multi-device function handle ", handle,
+                            "not found. Was the function instantiated?");
   }
 
   // Check whether we have the right rendezvous.
   if (opts.rendezvous && (*data)->is_cross_process_ &&
       !opts.rendezvous->is_cross_process()) {
-    return absl::InvalidArgumentError(absl::StrCat(
+    return errors::InvalidArgument(
         "Running a cross process function ", (*data)->function_name_,
-        " without an appropriate cross process Rendezvous."));
+        " without an appropriate cross process Rendezvous.");
   }
 
   return absl::OkStatus();
@@ -1197,8 +1194,7 @@ absl::Status ProcessFunctionLibraryRuntime::IsCrossProcess(
     *is_cross_process = it->second->is_cross_process();
     return absl::OkStatus();
   }
-  return absl::InvalidArgumentError(
-      absl::StrCat("Handle ", handle, " not found."));
+  return errors::InvalidArgument("Handle ", handle, " not found.");
 }
 
 void ProcessFunctionLibraryRuntime::InstantiateRemote(
@@ -1207,9 +1203,9 @@ void ProcessFunctionLibraryRuntime::InstantiateRemote(
     FunctionLibraryRuntime::Handle* handle,
     FunctionLibraryRuntime::DoneCallback done) {
   if (parent_ == nullptr) {
-    done(absl::InternalError(absl::StrCat(
+    done(errors::Internal(
         "Currently don't support instantiating functions on device: ",
-        options.target)));
+        options.target));
     return;
   }
   auto target = options.target;
@@ -1271,13 +1267,13 @@ absl::Status ProcessFunctionLibraryRuntime::ReleaseMultiDeviceHandle(
       // TODO(nareshmodi): Implement DeregisterGraph call to remote device if
       // parent is not null.
       if (parent_ != nullptr) {
-        return absl::UnimplementedError(
+        return errors::Unimplemented(
             "Releasing a multi-device component handle on a remote device is "
             "not yet implemented.");
       }
-      return absl::InvalidArgumentError(absl::StrCat(
+      return errors::InvalidArgument(
           "Failed to find FunctionLibraryRuntime for device ", device,
-          " when releasing multi-device function handle ", handle));
+          " when releasing multi-device function handle ", handle);
     }
     absl::Status status = flr->ReleaseHandle(flr_handle);
     if (!status.ok()) {
@@ -1312,7 +1308,7 @@ absl::Status ProcessFunctionLibraryRuntime::ReleaseHandle(
   if (flr != nullptr) {
     return flr->ReleaseHandle(handle);
   }
-  return absl::InvalidArgumentError(absl::StrCat("Handle not found: ", handle));
+  return errors::InvalidArgument("Handle not found: ", handle);
 }
 
 FunctionLibraryRuntime::DoneCallback
@@ -1342,7 +1338,7 @@ absl::Status ProcessFunctionLibraryRuntime::CreateRendezvous(
     tsl::core::RefCountPtr<Rendezvous>* created_rendezvous) const {
   DCHECK(opts.rendezvous == nullptr);
   if (!rendezvous_factory_) {
-    return absl::FailedPreconditionError(
+    return errors::FailedPrecondition(
         "The caller does not provide a rendezvous and "
         "ProcessFunctionLibraryRuntime was created without a rendezvous "
         "factory.");
@@ -1363,21 +1359,21 @@ absl::Status ProcessFunctionLibraryRuntime::GetComponentArgs(
   // "Index"s of _Arg nodes are unique when all arguments are local Tensors.
   for (const auto& it : comp_data.arg_indices) {
     if (it.index >= args.size()) {
-      return absl::InvalidArgumentError(absl::StrCat(
-          "index ", it.index, " is out of range [0, ", args.size(), ")"));
+      return errors::InvalidArgument("index ", it.index,
+                                     " is out of range [0, ", args.size(), ")");
     }
     if (it.sub_index >= 0) {
       const Tensor& t = args[it.index];
       if (t.dtype() != DT_RESOURCE) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Got unexpected sub_index ", it.sub_index,
-                         " for argument ", it.index));
+        return errors::InvalidArgument("Got unexpected sub_index ",
+                                       it.sub_index, " for argument ",
+                                       it.index);
       }
       const auto& handles = t.flat<ResourceHandle>();
       if (it.sub_index >= handles.size()) {
-        return absl::InvalidArgumentError(
-            absl::StrCat("Sub_index ", it.sub_index, "is out of range [0,",
-                         handles.size(), ") for argument ", it.index));
+        return errors::InvalidArgument("Sub_index ", it.sub_index,
+                                       "is out of range [0,", handles.size(),
+                                       ") for argument ", it.index);
       }
       comp_args->args.push_back(Tensor(handles(it.sub_index)));
     } else {
@@ -1468,8 +1464,7 @@ void ProcessFunctionLibraryRuntime::RunInternal(
     tf_shared_lock l(mu_);
     auto iter = function_data_.find(handle);
     if (iter == function_data_.end()) {
-      done(
-          absl::NotFoundError(absl::StrCat("Handle: ", handle, " not found.")));
+      done(errors::NotFound("Handle: ", handle, " not found."));
       return;
     }
     FunctionData* function_data = iter->second.get();
@@ -1478,10 +1473,10 @@ void ProcessFunctionLibraryRuntime::RunInternal(
   }
 
   if (!opts.remote_execution) {
-    done(absl::InvalidArgumentError(
-        "ProcessFunctionLibraryRuntime::Run should "
-        "only be called for multi-device functions or "
-        "for remote execution."));
+    done(
+        errors::InvalidArgument("ProcessFunctionLibraryRuntime::Run should "
+                                "only be called for multi-device functions or "
+                                "for remote execution."));
     return;
   }
 
@@ -1547,7 +1542,7 @@ void ProcessFunctionLibraryRuntime::RunInternal(
     parent_->Run(opts, local_handle, args, rets, std::move(done));
     return;
   }
-  done(absl::InternalError("Could not find device"));
+  done(errors::Internal("Could not find device"));
 }
 
 void ProcessFunctionLibraryRuntime::Run(
@@ -1578,10 +1573,10 @@ void ProcessFunctionLibraryRuntime::Run(
         }
 
         if (rets->size() != frame->num_retvals()) {
-          done(absl::InternalError(absl::StrCat(
+          done(errors::Internal(
               "Number of return values from function (", rets->size(),
               ") did not match expected number of return values (",
-              frame->num_retvals(), ").")));
+              frame->num_retvals(), ")."));
           return;
         }
 
@@ -1703,7 +1698,7 @@ void ProcessFunctionLibraryRuntime::CleanUp(
     if (flr != nullptr) {
       // TODO(fishx): cleanup state for local execution.
       refcounted_done->UpdateStatus(
-          absl::InternalError("Cleanup items shouldn't contain local item."));
+          errors::Internal("Cleanup items shouldn't contain local item."));
       refcounted_done->Unref();
     } else if (parent_ != nullptr) {
       parent_->CleanUp(item->step_id, item->local_handle,
@@ -1716,7 +1711,7 @@ void ProcessFunctionLibraryRuntime::CleanUp(
                        });
     } else {
       refcounted_done->UpdateStatus(
-          absl::InternalError("Could not find device in cleanup."));
+          errors::Internal("Could not find device in cleanup."));
       refcounted_done->Unref();
     }
   }

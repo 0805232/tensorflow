@@ -58,7 +58,7 @@ class AccumulateNV2RemovePass : public GraphOptimizationPass {
 
     Graph* g = options.graph->get();
     if (g == nullptr) {
-      return absl::InternalError(
+      return errors::Internal(
           "AccumulateNV2 removal should happen before partitioning and a "
           "graph should be available.");
     }

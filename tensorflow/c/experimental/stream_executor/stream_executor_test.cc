@@ -234,7 +234,7 @@ TEST_F(StreamExecutorTest, HostMemoryAllocator) {
   StreamExecutor* executor = GetExecutor(0);
   ASSERT_FALSE(allocate_called);
   TF_ASSERT_OK_AND_ASSIGN(auto allocator,
-                          executor->CreateMemoryAllocator(MemorySpace::kHost));
+                          executor->CreateMemoryAllocator(MemoryType::kHost));
   TF_ASSERT_OK_AND_ASSIGN(auto mem, allocator->Allocate(8));
   ASSERT_NE(mem->opaque(), nullptr);
   ASSERT_TRUE(allocate_called);
@@ -258,7 +258,7 @@ TEST_F(StreamExecutorTest, UnifiedMemoryAllocate) {
   StreamExecutor* executor = GetExecutor(0);
   ASSERT_FALSE(allocate_called);
   TF_ASSERT_OK_AND_ASSIGN(
-      auto allocator, executor->CreateMemoryAllocator(MemorySpace::kUnified));
+      auto allocator, executor->CreateMemoryAllocator(MemoryType::kUnified));
   TF_ASSERT_OK_AND_ASSIGN(auto mem, allocator->Allocate(8));
   ASSERT_NE(mem->opaque(), nullptr);
   ASSERT_TRUE(allocate_called);
