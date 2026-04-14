@@ -150,7 +150,7 @@ cc_library(
     deps = [
         "//xla/backends/gpu/codegen/emitters/transforms:passes",
         "//xla/backends/gpu/codegen/triton/transforms:passes",
-        "//xla/codegen/emitters/transforms:convert_pure_call_ops_pass",
+        "//xla/backends/gpu/codegen/triton/transforms:triton_xla_implement_extern_element_wise_pass",
         "//xla/codegen/emitters/transforms:passes",
         "//xla/service:hlo_module_config",
         "//xla/service/gpu:matmul_utils",
@@ -642,6 +642,8 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/strings:string_view",
+        "@llvm-project//llvm:Support",
         "@llvm-project//mlir:IR",
         "@llvm-project//mlir:LLVMDialect",
         "@llvm-project//mlir:Support",

@@ -144,18 +144,19 @@ absl::string_view MemSyncScopeToPTXScope(MemSyncScope scope) {
 }  // namespace
 
 absl::StatusOr<ExternFunctionInstruction> ParseExternFunctionName(
-    absl::string_view func_name) {
+    llvm::StringRef func_name) {
   // Function name format: xla_<functionname>_<arg1>_<arg2>_...
   // Split by underscore to get tokens
-  std::vector<absl::string_view> tokens = absl::StrSplit(func_name, '_');
+  llvm::SmallVector<llvm::StringRef, 5> tokens;
+  func_name.split(tokens, '_');
 
   // Must have at least 2 tokens: "xla" and function name
   if (tokens.size() < 2 || tokens[0] != "xla") {
     return absl::InvalidArgumentError(
-        absl::StrFormat("Invalid extern function name: %s", func_name));
+        absl::StrFormat("Invalid extern function name: %s", func_name.str()));
   }
 
-  absl::string_view fn_name = tokens[1];
+  llvm::StringRef fn_name = tokens[1];
 
   // xla_getthreadid (2 tokens total)
   if (fn_name == "getthreadid") {
@@ -222,6 +223,27 @@ std::string SerializeExternFunctionName(
           },
       },
       instruction);
+}
+
+absl::StatusOr<std::string> ToExternFunctionName(mlir::Operation* op) {
+  ExternFunctionInstruction instruction;
+
+  if (auto atomic_write = mlir::dyn_cast<AtomicWriteOp>(op)) {
+    instruction = AtomicWriteInstruction{atomic_write.getMemSyncSemantic(),
+                                         atomic_write.getMemSyncScope()};
+  } else if (auto atomic_wait = mlir::dyn_cast<AtomicSpinWaitOp>(op)) {
+    instruction = AtomicSpinWaitInstruction{atomic_wait.getMemSyncSemantic(),
+                                            atomic_wait.getMemSyncScope(),
+                                            atomic_wait.getComparator()};
+  } else if (mlir::dyn_cast<GetTidOp>(op)) {
+    instruction = GetThreadIdInstruction{};
+  } else {
+    return absl::InvalidArgumentError(absl::StrFormat(
+        "Unsupported operation type for extern function name: %s",
+        op->getName().getStringRef().str()));
+  }
+
+  return SerializeExternFunctionName(instruction);
 }
 
 absl::Status ValidateMemorySemantic(
@@ -305,8 +327,9 @@ mlir::Value CreateAtomicWriteOps(const AtomicWriteInstruction& instruction,
   )";
     std::string atomic_write_asm = absl::StrFormat(
         kAtomicWriteAsmWithMaskTemplate, scope, memory_semantic);
-    auto asm_op = LLVM::InlineAsmOp::create(
-        builder, params.loc, i32_type, mlir::ValueRange{addr, value, mask},
+    LLVM::InlineAsmOp::create(
+        builder, params.loc, mlir::TypeRange{},
+        mlir::ValueRange{addr, value, mask},
         builder.getStringAttr(atomic_write_asm), builder.getStringAttr("l,r,r"),
         /*has_side_effects=*/builder.getUnitAttr(),
         /*is_align_stack=*/nullptr,
@@ -314,23 +337,24 @@ mlir::Value CreateAtomicWriteOps(const AtomicWriteInstruction& instruction,
                                     LLVM::TailCallKind::None),
         /*asm_dialect=*/nullptr,
         /*operand_attrs=*/nullptr);
-    return asm_op.getResult(0);
-  }
-  constexpr absl::string_view kAtomicWriteAsmTemplate = R"(
+  } else {
+    constexpr absl::string_view kAtomicWriteAsmTemplate = R"(
     st.global.%s.%s.u32 [$0], $1;
   )";
-  std::string atomic_write_asm =
-      absl::StrFormat(kAtomicWriteAsmTemplate, scope, memory_semantic);
-  auto asm_op = LLVM::InlineAsmOp::create(
-      builder, params.loc, i32_type, mlir::ValueRange{addr, value},
-      builder.getStringAttr(atomic_write_asm), builder.getStringAttr("l,r"),
-      /*has_side_effects=*/builder.getUnitAttr(),
-      /*is_align_stack=*/nullptr,
-      LLVM::TailCallKindAttr::get(builder.getContext(),
-                                  LLVM::TailCallKind::None),
-      /*asm_dialect=*/nullptr,
-      /*operand_attrs=*/nullptr);
-  return asm_op.getResult(0);
+    std::string atomic_write_asm =
+        absl::StrFormat(kAtomicWriteAsmTemplate, scope, memory_semantic);
+    LLVM::InlineAsmOp::create(
+        builder, params.loc, mlir::TypeRange{}, mlir::ValueRange{addr, value},
+        builder.getStringAttr(atomic_write_asm), builder.getStringAttr("l,r"),
+        /*has_side_effects=*/builder.getUnitAttr(),
+        /*is_align_stack=*/nullptr,
+        LLVM::TailCallKindAttr::get(builder.getContext(),
+                                    LLVM::TailCallKind::None),
+        /*asm_dialect=*/nullptr,
+        /*operand_attrs=*/nullptr);
+  }
+  // Return poison value since atomic write doesn't produce a meaningful result
+  return builder.create<LLVM::PoisonOp>(params.loc, i32_type);
 }
 
 // Create LLVM ops for AtomicSpinWaitInstruction
@@ -367,8 +391,9 @@ mlir::Value CreateAtomicSpinWaitOps(
   )";
     std::string atomic_wait_asm = absl::StrFormat(
         kAtomicSpinWaitAsmWithMaskTemplate, scope, memory_semantic, comparator);
-    auto asm_op = LLVM::InlineAsmOp::create(
-        builder, params.loc, i32_type, mlir::ValueRange{addr, expected, mask},
+    LLVM::InlineAsmOp::create(
+        builder, params.loc, mlir::TypeRange{},
+        mlir::ValueRange{addr, expected, mask},
         builder.getStringAttr(atomic_wait_asm), builder.getStringAttr("l,r,r"),
         /*has_side_effects=*/builder.getUnitAttr(),
         /*is_align_stack=*/nullptr,
@@ -376,9 +401,8 @@ mlir::Value CreateAtomicSpinWaitOps(
                                     LLVM::TailCallKind::None),
         /*asm_dialect=*/nullptr,
         /*operand_attrs=*/nullptr);
-    return asm_op.getResult(0);
-  }
-  constexpr absl::string_view kAtomicSpinWaitAsmTemplate = R"(
+  } else {
+    constexpr absl::string_view kAtomicSpinWaitAsmTemplate = R"(
     {
     .reg .pred %%p<1>;
     .reg .b32 %%r<1>;
@@ -388,18 +412,22 @@ mlir::Value CreateAtomicSpinWaitOps(
       @%%p0 bra wait;
     }
   )";
-  std::string atomic_wait_asm = absl::StrFormat(
-      kAtomicSpinWaitAsmTemplate, scope, memory_semantic, comparator);
-  auto asm_op = LLVM::InlineAsmOp::create(
-      builder, params.loc, i32_type, mlir::ValueRange{addr, expected},
-      builder.getStringAttr(atomic_wait_asm), builder.getStringAttr("l,r"),
-      /*has_side_effects=*/builder.getUnitAttr(),
-      /*is_align_stack=*/nullptr,
-      LLVM::TailCallKindAttr::get(builder.getContext(),
-                                  LLVM::TailCallKind::None),
-      /*asm_dialect=*/nullptr,
-      /*operand_attrs=*/nullptr);
-  return asm_op.getResult(0);
+    std::string atomic_wait_asm = absl::StrFormat(
+        kAtomicSpinWaitAsmTemplate, scope, memory_semantic, comparator);
+    LLVM::InlineAsmOp::create(
+        builder, params.loc, mlir::TypeRange{},
+        mlir::ValueRange{addr, expected},
+        builder.getStringAttr(atomic_wait_asm), builder.getStringAttr("l,r"),
+        /*has_side_effects=*/builder.getUnitAttr(),
+        /*is_align_stack=*/nullptr,
+        LLVM::TailCallKindAttr::get(builder.getContext(),
+                                    LLVM::TailCallKind::None),
+        /*asm_dialect=*/nullptr,
+        /*operand_attrs=*/nullptr);
+  }
+  // Return poison value since atomic spin wait doesn't produce a meaningful
+  // result
+  return builder.create<LLVM::PoisonOp>(params.loc, i32_type);
 }
 
 }  // namespace
