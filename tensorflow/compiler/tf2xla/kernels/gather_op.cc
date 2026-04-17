@@ -39,8 +39,8 @@ limitations under the License.
 
 namespace tensorflow {
 
-absl::Status XlaGather(const xla::XlaOp& input, const TensorShape& input_shape,
-                       const xla::XlaOp& indices,
+absl::Status XlaGather(const xla::XlaOp input, const TensorShape& input_shape,
+                       const xla::XlaOp indices,
                        const TensorShape& indices_shape, int64_t axis,
                        bool indices_are_nd, DataType dtype, DataType index_type,
                        xla::XlaBuilder* builder, xla::XlaOp* gather_output) {

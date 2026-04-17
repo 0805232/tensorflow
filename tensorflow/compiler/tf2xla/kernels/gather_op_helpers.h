@@ -33,11 +33,11 @@ namespace tensorflow {
 // If `indices_are_nd` is true, the last dimension of `indices` are treated as
 // a multidimensional index values. Otherwise, `indices` is treated as a tensor
 // of scalar indices.
-absl::Status XlaGather(const xla::XlaOp& input, const TensorShape& input_shape,
-                       const xla::XlaOp& indices,
-                       const TensorShape& indices_shape, int64_t axis,
-                       bool indices_are_nd, DataType dtype, DataType index_type,
-                       xla::XlaBuilder* builder, xla::XlaOp* gather_output);
+absl::Status XlaGather(xla::XlaOp input, const TensorShape& input_shape,
+                       xla::XlaOp indices, const TensorShape& indices_shape,
+                       int64_t axis, bool indices_are_nd, DataType dtype,
+                       DataType index_type, xla::XlaBuilder* builder,
+                       xla::XlaOp* gather_output);
 
 // The implementation of Gather and ResourceGather through XLA. Uses `input` as
 // the input instead of context->input(0) in order to allow ResourceGather to
