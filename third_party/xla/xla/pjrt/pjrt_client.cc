@@ -44,6 +44,74 @@ limitations under the License.
 
 namespace xla {
 
+PjRtMemorySpace* PjRtMemorySpace::FromC(PJRT_Memory* c_space) {
+  if (!c_space || !c_space->vtable || !c_space->vtable->get_user_data)
+    return nullptr;
+  void* owner = c_space->vtable->get_user_data(
+      c_space, reinterpret_cast<void*>(&PjRtMemorySpace::FromC));
+  return static_cast<PjRtMemorySpace*>(owner);
+}
+
+PjRtMemorySpaceCApiDelegator::~PjRtMemorySpaceCApiDelegator() {
+  for (auto& [key, value] : user_data_) {
+    if (value.dtor && value.data) {
+      value.dtor(value.data);
+    }
+  }
+}
+
+void* PjRtMemorySpaceCApiDelegator::GetUserDataImpl(PJRT_Memory* memory,
+                                                    void* key) {
+  auto* d = reinterpret_cast<PjRtMemorySpaceCApiDelegator*>(memory);
+  if (key == reinterpret_cast<void*>(&PjRtMemorySpace::FromC)) {
+    return d->owner_;
+  }
+  auto it = d->user_data_.find(key);
+  if (it != d->user_data_.end()) {
+    return it->second.data;
+  }
+  return nullptr;
+}
+
+void PjRtMemorySpaceCApiDelegator::SetUserDataImpl(PJRT_Memory* memory,
+                                                   void* key, void* data,
+                                                   CApiDtor dtor) {
+  auto* d = reinterpret_cast<PjRtMemorySpaceCApiDelegator*>(memory);
+  if (key == reinterpret_cast<void*>(&PjRtMemorySpace::FromC)) {
+    if (dtor && data) {
+      dtor(data);
+    }
+    return;
+  }
+  auto it = d->user_data_.find(key);
+  if (it != d->user_data_.end()) {
+    if (it->second.dtor && it->second.data) {
+      it->second.dtor(it->second.data);
+    }
+  }
+  if (data == nullptr) {
+    d->user_data_.erase(key);
+  } else {
+    d->user_data_[key] = UserData{data, dtor};
+  }
+}
+
+/*static*/ PJRT_Memory_FunctionTable
+    PjRtMemorySpaceCApiDelegator::g_delegator_vtable = []() {
+      PJRT_Memory_FunctionTable vtable;
+      vtable.struct_size = PJRT_Memory_FunctionTable_STRUCT_SIZE;
+      vtable.extension_start = nullptr;
+      vtable.get_user_data = &PjRtMemorySpaceCApiDelegator::GetUserDataImpl;
+      vtable.set_user_data = &PjRtMemorySpaceCApiDelegator::SetUserDataImpl;
+      return vtable;
+    }();
+
+PjRtMemorySpaceCApiDelegator::PjRtMemorySpaceCApiDelegator(
+    PjRtMemorySpace* owner)
+    : owner_(owner) {
+  c_memory_.vtable = &g_delegator_vtable;
+}
+
 PjRtBuffer::ExternalReference::~ExternalReference() = default;
 
 absl::StatusOr<std::uintptr_t> PjRtClient::UnsafeBufferPointer(
