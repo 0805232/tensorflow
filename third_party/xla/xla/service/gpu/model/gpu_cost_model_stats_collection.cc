@@ -15,6 +15,8 @@ limitations under the License.
 
 #include "xla/service/gpu/model/gpu_cost_model_stats_collection.h"
 
+#include <cstdint>
+
 #include "absl/container/flat_hash_set.h"
 #include "absl/log/check.h"
 #include "absl/log/log.h"
@@ -31,6 +33,7 @@ limitations under the License.
 #include "xla/hlo/utils/hlo_query.h"
 #include "xla/service/gpu/backend_configs.pb.h"
 #include "xla/service/gpu/ir_emission_utils.h"
+#include "xla/service/gpu/matmul_utils.h"
 #include "xla/service/gpu/model/block_level_parameters.h"
 #include "xla/service/gpu/model/gpu_dot_fusion_cost_model.h"
 #include "xla/service/gpu/model/gpu_indexing_performance_model.h"
@@ -82,6 +85,28 @@ absl::StatusOr<EstimateRunTimeData> MaybeGetGemmCostModelForGemmTritonFusion(
   BlockLevelParameters block_params =
       BlockLevelParameters::FromBlockLevelFusionConfig(
           config.fusion_backend_config().block_level_fusion_config());
+
+  // Extract the tile size along the contracting dimension K (`block_k`) from
+  // the Triton GEMM configuration, falling back to the full K dimension if
+  // the configuration is not present.
+  block_params.block_k = [&]() -> int64_t {
+    const auto& backend_config = config.fusion_backend_config();
+    if (backend_config.has_triton_gemm_config()) {
+      auto triton_config =
+          TritonGemmConfig::FromProto(backend_config.triton_gemm_config());
+      if (triton_config.ok()) {
+        return triton_config->block_k;
+      }
+    }
+
+    const auto& dim_numbers = dot->dot_dimension_numbers();
+    if (dim_numbers.lhs_contracting_dimensions_size() > 0) {
+      return dot->operand(0)->shape().dimensions(
+          dim_numbers.lhs_contracting_dimensions(0));
+    }
+
+    return 0;
+  }();
 
   return gpu_dot_fusion_cost_model::EstimateRunTimeForDotOpWithBlockParameters(
       dot, block_params, device_info);
