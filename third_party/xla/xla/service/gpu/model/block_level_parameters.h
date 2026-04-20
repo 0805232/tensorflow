@@ -30,6 +30,7 @@ struct BlockLevelParameters {
   std::vector<std::vector<int64_t>> output_tile_sizes;
 
   // Triton-specific parameters.
+  int64_t block_k = 0;
   int64_t num_warps = 1;
   int num_ctas = 1;
   int num_stages = 1;
