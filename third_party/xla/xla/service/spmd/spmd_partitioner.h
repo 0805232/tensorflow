@@ -47,6 +47,7 @@ limitations under the License.
 #include "xla/service/call_graph.h"
 #include "xla/service/custom_call_sharding_helper.h"
 #include "xla/service/dot_as_convolution_util.h"
+#include "xla/service/memory_annotations.h"
 #include "xla/shape.h"
 #include "xla/xla_data.pb.h"
 
@@ -380,6 +381,11 @@ class SpmdPartitioner : public HloModulePass {
       if (auto* partitioner =
               GetCustomCallPartitioner(hlo->custom_call_target())) {
         return partitioner->CanSideEffectingHaveReplicatedSharding();
+      }
+      // annotate_device_placement is a memory placement annotation, not a
+      // true computational side-effect. It can safely have replicated sharding.
+      if (hlo->custom_call_target() == memory_annotations::kDevicePlacement) {
+        return true;
       }
     }
     return hlo->opcode() == HloOpcode::kInfeed ||

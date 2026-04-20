@@ -68,6 +68,7 @@ limitations under the License.
 #include "xla/service/computation_layout.h"
 #include "xla/service/hlo_cse.h"
 #include "xla/service/hlo_module_config.h"
+#include "xla/service/memory_annotations.h"
 #include "xla/service/shape_inference.h"
 #include "xla/service/spmd/custom_call_handler.h"
 #include "xla/service/spmd/shardy/constants.h"
@@ -6271,7 +6272,9 @@ absl::Status SpmdPartitioner::PreprocessSharding(
     for (HloInstruction* hlo : computation->MakeInstructionPostOrder()) {
       if (hlo->HasSideEffectNoRecurse() && hlo->opcode() != HloOpcode::kRng &&
           (hlo->opcode() != HloOpcode::kCustomCall ||
-           GetCustomCallPartitioner(hlo->custom_call_target()) == nullptr)) {
+           (GetCustomCallPartitioner(hlo->custom_call_target()) == nullptr &&
+            hlo->custom_call_target() !=
+                memory_annotations::kDevicePlacement))) {
         // TODO: b/432201708 - Remove this error once Shardy is stable in JAX.
         if (hlo->opcode() == HloOpcode::kCustomCall) {
           TF_RET_CHECK(hlo->custom_call_target().rfind("xla.sdy", 0) != 0)

@@ -1300,6 +1300,12 @@ absl::Status SpmdPartitioningVisitor::HandleCustomCall(HloInstruction* hlo) {
     return HandleElementwise(hlo);
   }
 
+  if (hlo->custom_call_target() == memory_annotations::kDevicePlacement) {
+    SetPartitionedHlo(
+        hlo, GetPartitionedHlo(hlo->operand(0)).Reshard(hlo->sharding()));
+    return absl::OkStatus();
+  }
+
   if (hlo->custom_call_target() ==
           memory_annotations::kMoveToDeviceCustomCallTarget ||
       hlo->custom_call_target() ==
