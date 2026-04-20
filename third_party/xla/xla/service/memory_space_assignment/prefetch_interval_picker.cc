@@ -61,6 +61,11 @@ bool InstructionCountPrefetchIntervalPicker::CanAllocateInAlternateMemoryNoCopy(
   return end_time - start_time <= max_overlap_count_;
 }
 
+bool InstructionCountPrefetchIntervalPicker::CanAllocateInAlternateMemoryNoCopy(
+    int64_t shape_size, int64_t start_time, int64_t end_time) const {
+  return end_time - start_time <= max_overlap_count_;
+}
+
 int64_t InstructionCountPrefetchIntervalPicker::PreferredEvictionEndTime(
     const Shape& shape, int64_t start_time, int64_t latest_end_time) const {
   return std::min(start_time + min_overlap_count_, latest_end_time);
@@ -218,6 +223,9 @@ CostAnalysisPrefetchIntervalPicker::CostAnalysisPrefetchIntervalPicker(
   for (int i = 0; i <= max_while_nest_level; ++i) {
     while_execution_counts_.push_back(cost_analysis_.GetWhileNestMultiplier(i));
   }
+  if (shape_override_) {
+    shape_override_size_ = cost_analysis_.GetShapeSizeBytes(*shape_override_);
+  }
 }
 
 float CostAnalysisPrefetchIntervalPicker::GetMaxElapsedInAlternateMemory(
@@ -230,8 +238,24 @@ bool CostAnalysisPrefetchIntervalPicker::CanAllocateInAlternateMemoryNoCopy(
   // Even though this method returns if we allow the buffer in alternate memory
   // _without_ asynchronous copies, calculate how long it would have taken to
   // copy it and compare it to the elapsed time in the logical interval.
-  float async_copy_elapsed = cost_analysis_.GetAsyncCopyElapsed(
-      shape_override_ ? *shape_override_ : shape);
+  int64_t effective_size = shape_override_
+                               ? *shape_override_size_
+                               : cost_analysis_.GetShapeSizeBytes(shape);
+  float async_copy_elapsed = static_cast<float>(effective_size) /
+                             cost_analysis_.DefaultMemBandwidthBytesPerSecond(
+                                 /*use_scaling_factor=*/true);
+  float logical_interval_elapsed =
+      GetLogicalIntervalElapsed(start_time, end_time);
+  return GetMaxElapsedInAlternateMemory(async_copy_elapsed) >
+         logical_interval_elapsed;
+}
+
+bool CostAnalysisPrefetchIntervalPicker::CanAllocateInAlternateMemoryNoCopy(
+    int64_t shape_size, int64_t start_time, int64_t end_time) const {
+  int64_t effective_size = shape_override_ ? *shape_override_size_ : shape_size;
+  float async_copy_elapsed = static_cast<float>(effective_size) /
+                             cost_analysis_.DefaultMemBandwidthBytesPerSecond(
+                                 /*use_scaling_factor=*/true);
   float logical_interval_elapsed =
       GetLogicalIntervalElapsed(start_time, end_time);
   return GetMaxElapsedInAlternateMemory(async_copy_elapsed) >

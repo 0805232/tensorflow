@@ -803,8 +803,9 @@ bool MsaAlgorithm::IsUseAllowedInAlternateMemory(const AllocationValue& value,
     const Shape& shape = parameter_value->shape();
     // Allow the buffer in alternate memory if the buffer has a short live range
     // either at the beginning or end of the while loop body.
+    int64_t shape_size = options_.cost_analysis->GetShapeSizeBytes(shape);
     if (!options_.prefetch_interval_picker->CanAllocateInAlternateMemoryNoCopy(
-            shape, parameter_time, min_use_time)) {
+            shape_size, parameter_time, min_use_time)) {
       VLOG(4) << "While allocation not allowed in alternate memory. "
               << "use time = " << min_use_time << ", root time = " << root_time;
       return false;
@@ -855,8 +856,10 @@ bool MsaAlgorithm::IsUseAllowedInAlternateMemory(const AllocationValue& value,
               min_use_time, instruction_schedule.at(parameter_use.instruction));
         }
       }
+      int64_t shape_size =
+          options_.cost_analysis->GetShapeSizeBytes(parameter_value->shape());
       if (options_.prefetch_interval_picker->CanAllocateInAlternateMemoryNoCopy(
-              parameter_value->shape(), parameter_time, min_use_time)) {
+              shape_size, parameter_time, min_use_time)) {
         VLOG(4) << "Conditional allocation allowed in alternate memory for "
                    "computation = "
                 << called_computation->name()

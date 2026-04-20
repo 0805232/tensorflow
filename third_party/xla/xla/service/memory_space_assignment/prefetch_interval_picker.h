@@ -46,6 +46,9 @@ class PrefetchIntervalPicker {
   virtual bool CanAllocateInAlternateMemoryNoCopy(const Shape& shape,
                                                   int64_t start_time,
                                                   int64_t end_time) const = 0;
+  virtual bool CanAllocateInAlternateMemoryNoCopy(int64_t shape_size,
+                                                  int64_t start_time,
+                                                  int64_t end_time) const = 0;
 
   // Returns the preferred end time for an eviction that starts at a given time
   // and must end by the given end time.
@@ -146,6 +149,9 @@ class InstructionCountPrefetchIntervalPicker : public PrefetchIntervalPicker {
   bool CanAllocateInAlternateMemoryNoCopy(const Shape& shape,
                                           int64_t start_time,
                                           int64_t end_time) const override;
+  bool CanAllocateInAlternateMemoryNoCopy(int64_t shape_size,
+                                          int64_t start_time,
+                                          int64_t end_time) const override;
 
   int64_t PreferredEvictionEndTime(const Shape& shape, int64_t start_time,
                                    int64_t latest_end_time) const override;
@@ -206,6 +212,9 @@ class CostAnalysisPrefetchIntervalPicker : public PrefetchIntervalPicker {
       const Shape* shape_override = nullptr);
 
   bool CanAllocateInAlternateMemoryNoCopy(const Shape& shape,
+                                          int64_t start_time,
+                                          int64_t end_time) const override;
+  bool CanAllocateInAlternateMemoryNoCopy(int64_t shape_size,
                                           int64_t start_time,
                                           int64_t end_time) const override;
 
@@ -284,6 +293,7 @@ class CostAnalysisPrefetchIntervalPicker : public PrefetchIntervalPicker {
   // to treat all async copies the same duration. Having an override forces
   // prefetches to be scheduled roughly in FIFO order.
   std::optional<Shape> shape_override_;
+  std::optional<int64_t> shape_override_size_;
 };
 
 }  // namespace memory_space_assignment
