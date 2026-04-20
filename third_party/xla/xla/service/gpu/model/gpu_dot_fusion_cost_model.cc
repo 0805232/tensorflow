@@ -205,9 +205,31 @@ absl::StatusOr<absl::Duration> CalculateL2Time(
   int64_t threadblock_count = CalculateNumThreadblocks(dot, out_tile);
   double device_l2_bandwidth = 6.65 * 1e12;  // Measured H100 L2 bandwidth.
 
-  return absl::Seconds(1.0f *
-                       CalculateL2Bytes(out_tile, dot.k, threadblock_count) /
-                       device_l2_bandwidth);
+  int64_t block_k = out_tile.k == 0 ? dot.k : out_tile.k;
+  int64_t num_k_iters = CeilOfRatio<int64_t>(dot.k, block_k);
+
+  // Empirical overhead per K-dimension iteration. This acts as a proxy for
+  // memory instruction issue latency (TMA setup on Hopper, or cp.async/ldmatrix
+  // overhead on Ampere), mbarrier synchronization delays, and general loop
+  // evaluation overhead. Tuned via grid search on H100 microbenchmarks.
+  constexpr double kHopperLoopOverheadSeconds = 2000 * 1e-9;
+  // TODO (karupayun): Tune specifically for Ampere after getting A100
+  // microbenchmarks.
+  constexpr double kAmpereLoopOverheadSeconds = 0;
+
+  double k_loop_overhead;
+  if (device_info.cuda_compute_capability().IsAtLeastHopper()) {
+    k_loop_overhead = kHopperLoopOverheadSeconds;
+  } else {
+    // Ampere and older GPUs lacks TMA but uses cp.async which still incurs
+    // loop/issue overhead.
+    k_loop_overhead = kAmpereLoopOverheadSeconds;
+  }
+
+  double base_time_seconds =
+      1.0f * CalculateL2Bytes(out_tile, dot.k, threadblock_count) /
+      device_l2_bandwidth;
+  return absl::Seconds(base_time_seconds + num_k_iters * k_loop_overhead);
 }
 
 // Returns the effective HBM bandwidth in bytes per second for a given dma_size.
@@ -353,7 +375,8 @@ absl::StatusOr<EstimateRunTimeData> EstimateRunTimeForDotOpWithBlockParameters(
         absl::StrCat("Tile shape must be of size 2, got ", tile_shape.size()));
   }
   detail::OutputTileSize output_tile{/*m=*/tile_shape[0],
-                                     /*n=*/tile_shape[1]};
+                                     /*n=*/tile_shape[1],
+                                     /*k=*/block_params.block_k};
 
   EstimateRunTimeData estimates;
 

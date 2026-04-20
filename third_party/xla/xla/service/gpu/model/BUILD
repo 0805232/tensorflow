@@ -234,6 +234,7 @@ cc_library(
         "//xla/service:hlo_graph_dumper",
         "//xla/service/gpu:backend_configs_cc",
         "//xla/service/gpu:ir_emission_utils",
+        "//xla/service/gpu:matmul_utils",
         "//xla/stream_executor:device_description",
         "//xla/tsl/platform:statusor",
         "@com_google_absl//absl/container:flat_hash_set",
