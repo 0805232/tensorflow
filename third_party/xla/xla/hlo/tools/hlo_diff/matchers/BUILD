@@ -252,6 +252,7 @@ cc_library(
     hdrs = ["bipartite_matching.h"],
     deps = [
         ":similarity",
+        "//xla:shape_util",
         "//xla/hlo/ir:hlo",
         "//xla/hlo/tools/hlo_diff:hlo_gumgraph_mappings",
         "//xla/hlo/tools/hlo_diff/graph:hlo_gumgraph",

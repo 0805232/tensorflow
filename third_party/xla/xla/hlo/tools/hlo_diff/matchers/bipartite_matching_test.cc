@@ -221,5 +221,65 @@ ENTRY entry {
                                    Pair("c1", "c1")));
 }
 
+TEST_F(BipartiteMatcherUtilsTest, ConstantPhaseZeroThresholdBypass) {
+  const char* left_hlo_string = R"(
+HloModule module, is_scheduled=true
+
+ENTRY entry {
+  c1 = bf16[2]{0} constant({1.1, 2.2})
+  ROOT tuple = (bf16[2]{0}) tuple(c1)
+}
+)";
+  const char* right_hlo_string = R"(
+HloModule module, is_scheduled=true
+
+ENTRY entry {
+  c1 = bf16[4]{0} constant({1.1, 2.2, 3.3, 4.4})
+  ROOT tuple = (bf16[4]{0}) tuple(c1)
+}
+)";
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<xla::VerifiedHloModule> left_module,
+                          ParseAndReturnVerifiedModule(left_hlo_string));
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<xla::VerifiedHloModule> right_module,
+                          ParseAndReturnVerifiedModule(right_hlo_string));
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<const HloGumgraph> left_gumgraph,
+                          HloGumgraph::Create(left_module.get()));
+  TF_ASSERT_OK_AND_ASSIGN(std::unique_ptr<const HloGumgraph> right_gumgraph,
+                          HloGumgraph::Create(right_module.get()));
+  auto mappings = std::make_unique<HloGumgraphMappings>();
+  const CallGraphNode& left_entry_computation =
+      left_gumgraph->GetCallGraph().GetNode(left_module->entry_computation());
+  const CallGraphNode& right_entry_computation =
+      right_gumgraph->GetCallGraph().GetNode(right_module->entry_computation());
+
+  mappings->MapComputationsIfAbsent(left_entry_computation,
+                                    right_entry_computation,
+                                    ComputationMatchType::kSignature);
+  std::vector<const HloInstructionNode*> left_constants, right_constants;
+  for (const HloInstruction* instruction :
+       left_entry_computation.computation()->instructions()) {
+    if (instruction->IsConstant()) {
+      left_constants.push_back(left_gumgraph->GetNode(instruction));
+    }
+  }
+  for (const HloInstruction* instruction :
+       right_entry_computation.computation()->instructions()) {
+    if (instruction->IsConstant()) {
+      right_constants.push_back(right_gumgraph->GetNode(instruction));
+    }
+  }
+
+  // With phase_zero_threshold > 0.0 and differing constant values (they are
+  // different shapes/values), the single-instruction bypass prevents phase zero
+  // mapping, and differing shapes prevents phase 2 mapping.
+  MatchSameOpcodeInstructions(
+      *left_gumgraph, *right_gumgraph, left_constants, right_constants,
+      *mappings, MatcherType::kComputationGraphExactSignatureMatcher,
+      MapByPositionMode::kNever, /*phase_zero_threshold=*/0.5);
+
+  auto matched_params = ExtractMappedInstructionNames(*mappings);
+  EXPECT_TRUE(matched_params.empty());
+}
+
 }  // namespace
 }  // namespace xla::hlo_diff
