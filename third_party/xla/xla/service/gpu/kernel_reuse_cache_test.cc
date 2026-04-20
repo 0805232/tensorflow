@@ -18,6 +18,7 @@ limitations under the License.
 
 #include <gtest/gtest.h>
 #include "absl/log/check.h"
+#include "xla/tsl/concurrency/future.h"
 #include "xla/tsl/lib/core/status_test_util.h"
 #include "tsl/platform/env.h"
 
@@ -30,15 +31,25 @@ using KernelReuseTest = ::testing::Test;
 TEST_F(KernelReuseTest, ExportAndLoadWork) {
   KernelReuseCache cache;
   EXPECT_TRUE(cache.IsEmpty());
-  auto [result, was_cached] = cache.GetWithStatus(
-      "fingerprint", []() { return KernelReuseCache::Entry{}; });
+
+  auto [promise, returned] = tsl::MakePromise<KernelReuseCache::Entry>();
+  auto [future, was_cached] =
+      cache.GetWithStatus("fingerprint", [&returned]() { return returned; });
+
+  EXPECT_FALSE(future.IsReady());
+  promise.Set(KernelReuseCache::Entry{});
+
+  absl::StatusOr<const KernelReuseCache::Entry*> result = future.Await();
   TF_EXPECT_OK(result);
   EXPECT_NE(result.value(), nullptr);
   EXPECT_FALSE(was_cached);
   EXPECT_FALSE(cache.IsEmpty());
+
   const CompilationCacheProto proto = cache.Export();
   cache.Clear();
+
   EXPECT_TRUE(cache.IsEmpty());
+
   TF_EXPECT_OK(cache.Load(proto));
   EXPECT_FALSE(cache.IsEmpty());
 }
