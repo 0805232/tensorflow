@@ -163,6 +163,40 @@ class MemoryCleanupTest(test_base.DatasetTestBase, parameterized.TestCase):
 
     self.assertNoMemoryLeak(get_dataset)
 
+  @combinations.generate(test_base.eager_only_combinations())
+  def testFromGeneratorMemoryLeak(self):
+    try:
+      import resource
+    except ImportError:
+      self.skipTest("resource module required to run this test (Unix only)")
+
+    def get_rss_mb():
+      return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0
+
+    def gen():
+      for i in range(1000):
+        yield i
+
+    def f():
+      dataset = dataset_ops.Dataset.from_generator(
+          gen, output_types=dtypes.int64)
+      for _ in dataset:
+        pass
+
+    f() # warmup
+    import gc
+    gc.collect()
+    start_rss = get_rss_mb()
+    
+    for _ in range(150):
+      f()
+      
+    gc.collect()
+    end_rss = get_rss_mb()
+    increase = end_rss - start_rss
+    logging.info("Memory increase observed: %f MB" % increase)
+    self.assertLess(increase, 30.0, "Increase is too high")
+
   @combinations.generate(
       combinations.times(test_base.eager_only_combinations(),
                          combinations.combine(num_parallel_calls=[None, 10])))

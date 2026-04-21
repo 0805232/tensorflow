@@ -363,6 +363,13 @@ class PyFuncOp : public OpKernel {
                     "Python interpreter state is not initialized. "
                     "The process may be terminated."));
 
+    bool thread_state_created = false;
+#if PY_VERSION_HEX >= 0x030B0000
+    if (PyGILState_GetThisThreadState() == nullptr) {
+      thread_state_created = true;
+    }
+#endif
+
     PyGILState_STATE py_threadstate;
     py_threadstate = PyGILState_Ensure();
     bool log_on_error;
@@ -370,7 +377,18 @@ class PyFuncOp : public OpKernel {
     // Sometimes py_funcs can be called without a session and leak memory. This
     // ensures we clear the decref cache so this doesn't happen.
     ClearDecrefCache();
+
+#if PY_VERSION_HEX >= 0x030B0000
+    if (thread_state_created) {
+      PyThreadState* tstate = PyGILState_GetThisThreadState();
+      PyThreadState_Clear(tstate);
+      PyThreadState_DeleteCurrent();
+    } else {
+      PyGILState_Release(py_threadstate);
+    }
+#else
     PyGILState_Release(py_threadstate);
+#endif
 
     // Ensures that GIL is released even when !s.ok().
     if (!s.ok()) {
