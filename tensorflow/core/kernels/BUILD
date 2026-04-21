@@ -542,8 +542,26 @@ cc_library(
     deps = if_cuda_or_rocm([
         "@xla//xla/stream_executor:data_type",
         "@xla//xla/stream_executor:dnn",
+        "//tensorflow/core:framework_headers_lib",
+        "//tensorflow/core/util/autotune_maps:conv_parameters_hdrs",
+    ]) + [
+        ":gpu_util_hdrs",
         "//tensorflow/core:framework",
-    ]),
+        "//tensorflow/core:portable_gif_internal",
+        "//tensorflow/core/framework:allocator",
+        "//tensorflow/core/framework:tensor",
+        "//tensorflow/core/framework:tensor_shape",
+        "//tensorflow/core/platform:errors",
+        "//tensorflow/core/platform:status",
+        "//tensorflow/core/platform:statusor",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@xla//xla/stream_executor:device_memory",
+        "@xla//xla/stream_executor:scratch_allocator",
+        "@xla//xla/stream_executor:stream",
+        "@xla//xla/tsl/platform:status",
+        "@xla//xla/tsl/platform:statusor",
+    ],
 )
 
 cc_library(
@@ -582,18 +600,21 @@ tf_cuda_library(
     features = ["-layering_check"],
     deps = [
         ":gpu_util_hdrs",
+        "//google/protobuf:any_cc_proto",
         "//tensorflow/core:lib",
+        "//tensorflow/core/framework:tensor",
         "//tensorflow/core/platform:stream_executor",
         "//tensorflow/core/protobuf:autotuning_proto_cc",
         "//tensorflow/core/protobuf:conv_autotuning_proto_cc",
         "//tensorflow/core/util:determinism_for_kernels",
         "//tensorflow/core/util:env_var",
-        "//tensorflow/core/util/autotune_maps:conv_parameters",
         "//tensorflow/core/util/proto:proto_utils",
         "@com_google_absl//absl/algorithm:container",
         "@com_google_absl//absl/base",
+        "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/types:span",
+        "@xla//xla/stream_executor:dnn",
         "@xla//xla/stream_executor:lazy_op_runner",
         "@xla//xla/stream_executor/gpu:asm_compiler",
         "@xla//xla/stream_executor/gpu:redzone_allocator",
@@ -2536,6 +2557,8 @@ tf_kernel_library(
     ] + if_cuda_or_rocm([
         ":gpu_utils",
         ":conv_ops_gpu_hdrs",
+    ]) + if_google([
+        "//tensorflow/core/util/autotune_maps:conv_parameters",
     ]) + if_cuda([
         "@local_config_cuda//cuda:cudnn_header",
     ]) + if_rocm([
