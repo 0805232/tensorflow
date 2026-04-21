@@ -434,7 +434,7 @@ TEST_P(GpuAbortCollectivesTest, Abort) {
   GpuCollectives::Executor executor(nullptr);
   se::DeviceAddressBase addr;
 
-  AssertAborted(comms[0]->RegisterBufferOnce(addr, 0, false));
+  ASSERT_OK_AND_ASSIGN(auto symm_mem, comms[0]->CreateSymmetricMemory(addr));
   AssertEventAborted(
       comms[0]->AllReduce(addr, addr, U64, 0, ReductionKind::SUM, executor));
   AssertEventAborted(
