@@ -33,9 +33,9 @@ limitations under the License.
 #include "xla/autotuning.pb.h"
 #include "xla/backends/autotuner/codegen_backend.h"
 #if GOOGLE_CUDA
-#include "xla/backends/gpu/autotuner/cublas.h"
+#include "xla/backends/gpu/autotuner/cublaslt.h"
 #elif TENSORFLOW_USE_ROCM
-#include "xla/backends/gpu/autotuner/rocblas.h"
+#include "xla/backends/gpu/autotuner/hipblaslt.h"
 #endif
 #include "xla/backends/gpu/autotuner/gpu_codegen_backend.h"
 #include "xla/backends/gpu/transforms/dot_algorithm_rewriter.h"
@@ -243,26 +243,11 @@ std::unique_ptr<GpuCodegenBackend> CreateCublasBackend(
     se::StreamExecutor* stream_executor, const DebugOptions* debug_options,
     Compiler* compiler, const Compiler::GpuTargetConfig* target_config) {
 #if GOOGLE_CUDA
-  return std::make_unique<CublasBackend>(stream_executor, debug_options,
-                                         compiler, target_config);
+  return std::make_unique<CublasLtBackend>(stream_executor, debug_options,
+                                           compiler, target_config);
 #elif TENSORFLOW_USE_ROCM
-  return std::make_unique<RocblasBackend>(stream_executor, debug_options,
-                                          compiler, target_config);
-#endif
-  LOG(FATAL) << "Neither CUDA nor ROCm is enabled.";
-}
-
-std::unique_ptr<GpuCodegenBackend> CreateCublasBackendWithF8Fallback(
-    se::StreamExecutor* stream_executor, const DebugOptions* debug_options,
-    Compiler* compiler, const Compiler::GpuTargetConfig* target_config) {
-#if GOOGLE_CUDA
-  return std::make_unique<CublasBackend>(stream_executor, debug_options,
-                                         compiler, target_config,
-                                         /*enable_f8_fallback=*/true);
-#elif TENSORFLOW_USE_ROCM
-  return std::make_unique<RocblasBackend>(stream_executor, debug_options,
-                                          compiler, target_config,
-                                          /*fp8_lt_fallback=*/true);
+  return std::make_unique<HipblasLtBackend>(stream_executor, debug_options,
+                                            compiler, target_config);
 #endif
   LOG(FATAL) << "Neither CUDA nor ROCm is enabled.";
 }
@@ -420,35 +405,32 @@ INSTANTIATE_TEST_SUITE_P(
          /*expected_module_substrings_fn=*/
          [](const se::DeviceDescription& device_description) {
            return std::vector<std::string>{
-               "custom_call_target=\"__cublas$gemm\"",
-               "\"selected_algorithm\":\"-1\""};
+               "custom_call_target=\"__cublas$lt$matmul\"",
+               "\"selected_algorithm\":\"0\""};
          },
-         /*expected_backend_name=*/"CUBLAS_FISSION"},
+         /*expected_backend_name=*/"CUBLASLT_FISSION"},
         {"TritonFusion_CublasLt_F8", kF8TritonFusionHlo,
-         &GetCublasRewriterPipeline, &CreateCublasBackendWithF8Fallback,
+         &GetCublasRewriterPipeline, &CreateCublasBackend,
          /*expected_module_substrings_fn=*/
          [](const se::DeviceDescription& device_description) {
-           if (device_description.gpu_compute_capability()
-                   .cuda_compute_capability()
-                   ->IsAtLeastHopper()) {
-             return std::vector<std::string>{
-                 "custom_call_target=\"__cublas$lt$matmul$f8\"",
-                 "\"selected_algorithm\":\"0\""};
-           }
+           const auto& comp = device_description.gpu_compute_capability();
+           bool is_hopper =
+               !comp.IsRocm() && comp.cuda_compute_capability()->major >= 9;
            return std::vector<std::string>{
-               "custom_call_target=\"__cublas$gemm\"",
-               "\"selected_algorithm\":\"-1\""};
+               is_hopper ? "custom_call_target=\"__cublas$lt$matmul$f8\""
+                         : "custom_call_target=\"__cublas$lt$matmul\"",
+               "\"selected_algorithm\":\"0\""};
          },
-         /*expected_backend_name=*/"CUBLAS_FISSION"},
+         /*expected_backend_name=*/"CUBLASLT_FISSION"},
         {"ScaledDotFusion_Cublas", kScaledDotFusionHlo,
          &GetCublasRewriterPipeline, &CreateCublasBackend,
          /*expected_module_substrings_fn=*/
          [](const se::DeviceDescription& device_description) {
            return std::vector<std::string>{
-               "custom_call_target=\"__cublas$gemm\"",
-               "\"selected_algorithm\":\"-1\""};
+               "custom_call_target=\"__cublas$lt$matmul\"",
+               "\"selected_algorithm\":\"0\""};
          },
-         /*expected_backend_name=*/"CUBLAS_FISSION"},
+         /*expected_backend_name=*/"CUBLASLT_FISSION"},
     }),
     [](const ::testing::TestParamInfo<FissionTest::ParamType>& info) {
       return info.param.test_name;
