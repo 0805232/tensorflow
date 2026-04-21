@@ -1,0 +1,52 @@
+load("//xla/tests:build_defs.bzl", "xla_test")
+
+package(
+    default_applicable_licenses = ["//tensorflow:license"],
+    default_visibility = [
+        "//platforms/xla:__subpackages__",
+        "//xla:__subpackages__",
+    ],
+    transitive_visibility = "//xla:restricted",
+)
+
+xla_test(
+    name = "cudnn_test",
+    srcs = ["cudnn_test.cc"],
+    backends = ["gpu"],
+    tags = ["cuda-only"],
+    use_legacy_runtime = True,
+    deps = [
+        "//xla:comparison_util",
+        "//xla:debug_options_flags",
+        "//xla:error_spec",
+        "//xla:shape_util",
+        "//xla:xla_data_proto_cc",
+        "//xla:xla_proto_cc",
+        "//xla/backends/autotuner:backends_proto_cc",
+        "//xla/backends/gpu/tests/restricted:gpu_codegen_test",
+        "//xla/backends/gpu/transforms:cudnn_fusion_compiler",
+        "//xla/hlo/ir:hlo",
+        "//xla/hlo/testlib:filecheck",
+        "//xla/hlo/testlib:pattern_matcher_gmock",
+        "//xla/hlo/testlib:verified_hlo_module",
+        "//xla/service:dump",
+        "//xla/service:hlo_module_config",
+        "//xla/service:pattern_matcher",
+        "//xla/service/gpu:cudnn_support_utils",
+        "//xla/service/gpu:ir_emission_utils",
+        "//xla/service/gpu:stream_executor_util",
+        "//xla/stream_executor:device_description",
+        "//xla/stream_executor:dnn",
+        "//xla/stream_executor:stream_executor_h",
+        "//xla/stream_executor/cuda:cuda_compute_capability",
+        "//xla/tsl/platform:env",
+        "//xla/tsl/platform:errors",
+        "//xla/tsl/platform:statusor",
+        "//xla/tsl/platform:test",
+        "@com_google_absl//absl/status:status_matchers",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_googletest//:gtest_main",
+        "@tsl//tsl/platform:path",
+    ],
+)

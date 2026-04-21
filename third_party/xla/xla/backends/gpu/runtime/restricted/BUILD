@@ -1,0 +1,51 @@
+load("//xla/tests:build_defs.bzl", "xla_test")
+
+package(
+    default_applicable_licenses = ["//tensorflow:license"],
+    default_visibility = [
+        "//platforms/xla:__subpackages__",
+        "//xla:__subpackages__",
+    ],
+    transitive_visibility = "//xla:restricted",
+)
+
+xla_test(
+    name = "send_recv_thunk_test",
+    srcs = ["send_recv_thunk_test.cc"],
+    backends = ["gpu"],
+    use_legacy_runtime = True,
+    deps = [
+        "//xla:shape_util",
+        "//xla:util",
+        "//xla:xla_data_proto_cc",
+        "//xla:xla_proto_cc",
+        "//xla/backends/gpu/runtime:async_thunk",
+        "//xla/backends/gpu/runtime:collective_thunk",
+        "//xla/backends/gpu/runtime:command_buffer_cmd_emitter",
+        "//xla/backends/gpu/runtime:command_buffer_thunk",
+        "//xla/backends/gpu/runtime:command_executor",
+        "//xla/backends/gpu/runtime:execution_stream_id",
+        "//xla/backends/gpu/runtime:recv_thunk",
+        "//xla/backends/gpu/runtime:send_thunk",
+        "//xla/backends/gpu/runtime:thunk",
+        "//xla/backends/gpu/runtime:thunk_executor",
+        "//xla/backends/gpu/runtime:thunk_proto_cc",
+        "//xla/hlo/ir:hlo",
+        "//xla/hlo/testlib:verified_hlo_module",
+        "//xla/service:backend",
+        "//xla/service:buffer_assignment",
+        "//xla/service:executable",
+        "//xla/service:hlo_module_config",
+        "//xla/service/gpu:gpu_constants",
+        "//xla/service/gpu:gpu_executable",
+        "//xla/stream_executor:platform",
+        "//xla/stream_executor:stream",
+        "//xla/stream_executor:stream_executor_h",
+        "//xla/tests/restricted:hlo_test_base_legacy",
+        "//xla/tsl/platform:statusor",
+        "//xla/tsl/platform:test",
+        "@com_google_absl//absl/strings:string_view",
+        "@com_google_googletest//:gtest_main",
+        "@tsl//tsl/platform:casts",
+    ],
+)
