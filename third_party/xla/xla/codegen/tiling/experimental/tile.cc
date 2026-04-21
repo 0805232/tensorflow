@@ -57,11 +57,12 @@ absl::StatusOr<SmallVector<int64_t>> ConvertSymbolicExprsToInts(
   SmallVector<int64_t> result;
   result.reserve(symbolic_exprs.size());
   for (const auto& symbolic_expr : symbolic_exprs) {
-    if (symbolic_expr.GetType() == SymbolicExprType::kConstant) {
-      result.push_back(symbolic_expr.GetValue());
+    SymbolicExpr canonical_expr = symbolic_expr.Canonicalize();
+    if (canonical_expr.GetType() == SymbolicExprType::kConstant) {
+      result.push_back(canonical_expr.GetValue());
     } else {
       return absl::InvalidArgumentError(absl::StrCat(
-          "Symbolic expression is not a constant: ", symbolic_expr));
+          "Symbolic expression is not a constant: ", canonical_expr));
     }
   }
   return result;
