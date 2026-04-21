@@ -7827,6 +7827,260 @@ TEST_F(HloEvaluatorTest, Simple4x4Conv2DWith2x2KernelNoOutputLayout) {
   EXPECT_TRUE(LiteralTestUtil::Equal(expected, result));
 }
 
+TEST_F(HloEvaluatorTest, Scan1D) {
+  auto scan_builder = HloComputation::Builder("scan_add");
+  auto scan_param0 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(0, ShapeUtil::MakeShape(F32, {}), "x"));
+  auto scan_param1 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(1, ShapeUtil::MakeShape(F32, {}), "y"));
+  auto add = scan_builder.AddInstruction(
+      HloInstruction::CreateBinary(ShapeUtil::MakeShape(F32, {}),
+                                   HloOpcode::kAdd, scan_param0, scan_param1));
+  scan_builder.AddInstruction(HloInstruction::CreateTuple({add, add}));
+  auto scan_computation = m_->AddEmbeddedComputation(scan_builder.Build());
+
+  auto builder = HloComputation::Builder(TestName());
+  auto input = builder.AddInstruction(HloInstruction::CreateConstant(
+      LiteralUtil::CreateR1<float>({1.0f, 2.0f, 3.0f, 4.0f})));
+  auto init = builder.AddInstruction(
+      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(0.0f)));
+
+  Shape tuple_shape = ShapeUtil::MakeTupleShape(
+      {ShapeUtil::MakeShape(F32, {4}), ShapeUtil::MakeShape(F32, {})});
+  auto scan = builder.AddInstruction(HloInstruction::CreateScan(
+      tuple_shape, {input}, {init}, scan_computation, /*scan_dimension=*/0,
+      /*is_reverse=*/false));
+  m_->AddEntryComputation(builder.Build());
+
+  auto result = evaluator_.Evaluate(scan).value();
+
+  auto expected = LiteralUtil::MakeTupleOwned(
+      LiteralUtil::CreateR1<float>({1.0f, 3.0f, 6.0f, 10.0f}),
+      LiteralUtil::CreateR0<float>(10.0f));
+  EXPECT_TRUE(LiteralTestUtil::Equal(expected, result));
+}
+
+TEST_F(HloEvaluatorTest, Scan1DReverse) {
+  auto scan_builder = HloComputation::Builder("scan_add");
+  auto scan_param0 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(0, ShapeUtil::MakeShape(F32, {}), "x"));
+  auto scan_param1 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(1, ShapeUtil::MakeShape(F32, {}), "y"));
+  auto add = scan_builder.AddInstruction(
+      HloInstruction::CreateBinary(ShapeUtil::MakeShape(F32, {}),
+                                   HloOpcode::kAdd, scan_param0, scan_param1));
+  scan_builder.AddInstruction(HloInstruction::CreateTuple({add, add}));
+  auto scan_computation = m_->AddEmbeddedComputation(scan_builder.Build());
+
+  auto builder = HloComputation::Builder(TestName());
+  auto input = builder.AddInstruction(HloInstruction::CreateConstant(
+      LiteralUtil::CreateR1<float>({1.0f, 2.0f, 3.0f, 4.0f})));
+  auto init = builder.AddInstruction(
+      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(0.0f)));
+
+  Shape tuple_shape = ShapeUtil::MakeTupleShape(
+      {ShapeUtil::MakeShape(F32, {4}), ShapeUtil::MakeShape(F32, {})});
+  auto scan = builder.AddInstruction(HloInstruction::CreateScan(
+      tuple_shape, {input}, {init}, scan_computation, /*scan_dimension=*/0,
+      /*is_reverse=*/true));
+  m_->AddEntryComputation(builder.Build());
+
+  auto result = evaluator_.Evaluate(scan).value();
+
+  auto expected = LiteralUtil::MakeTupleOwned(
+      LiteralUtil::CreateR1<float>({10.0f, 9.0f, 7.0f, 4.0f}),
+      LiteralUtil::CreateR0<float>(10.0f));
+  EXPECT_TRUE(LiteralTestUtil::Equal(expected, result));
+}
+
+TEST_F(HloEvaluatorTest, Scan2D) {
+  auto scan_builder = HloComputation::Builder("scan_add");
+  auto scan_param0 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(0, ShapeUtil::MakeShape(F32, {2}), "x"));
+  auto scan_param1 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(1, ShapeUtil::MakeShape(F32, {2}), "y"));
+  auto add = scan_builder.AddInstruction(
+      HloInstruction::CreateBinary(ShapeUtil::MakeShape(F32, {2}),
+                                   HloOpcode::kAdd, scan_param0, scan_param1));
+  scan_builder.AddInstruction(HloInstruction::CreateTuple({add, add}));
+  auto scan_computation = m_->AddEmbeddedComputation(scan_builder.Build());
+
+  auto builder = HloComputation::Builder(TestName());
+  auto input = builder.AddInstruction(HloInstruction::CreateConstant(
+      LiteralUtil::CreateR2<float>({{1.0f, 2.0f}, {3.0f, 4.0f}})));
+  auto init = builder.AddInstruction(HloInstruction::CreateConstant(
+      LiteralUtil::CreateR1<float>({0.0f, 0.0f})));
+
+  Shape tuple_shape = ShapeUtil::MakeTupleShape(
+      {ShapeUtil::MakeShape(F32, {2, 2}), ShapeUtil::MakeShape(F32, {2})});
+  auto scan = builder.AddInstruction(HloInstruction::CreateScan(
+      tuple_shape, {input}, {init}, scan_computation, /*scan_dimension=*/0,
+      /*is_reverse=*/false));
+  m_->AddEntryComputation(builder.Build());
+
+  auto result = evaluator_.Evaluate(scan).value();
+
+  auto expected = LiteralUtil::MakeTupleOwned(
+      LiteralUtil::CreateR2<float>({{1.0f, 2.0f}, {4.0f, 6.0f}}),
+      LiteralUtil::CreateR1<float>({4.0f, 6.0f}));
+  EXPECT_TRUE(LiteralTestUtil::Equal(expected, result));
+}
+
+TEST_F(HloEvaluatorTest, Scan3D) {
+  auto scan_builder = HloComputation::Builder("scan_add");
+  auto scan_param0 =
+      scan_builder.AddInstruction(HloInstruction::CreateParameter(
+          0, ShapeUtil::MakeShape(F32, {2, 2}), "x"));
+  auto scan_param1 =
+      scan_builder.AddInstruction(HloInstruction::CreateParameter(
+          1, ShapeUtil::MakeShape(F32, {2, 2}), "y"));
+  auto add = scan_builder.AddInstruction(
+      HloInstruction::CreateBinary(ShapeUtil::MakeShape(F32, {2, 2}),
+                                   HloOpcode::kAdd, scan_param0, scan_param1));
+  scan_builder.AddInstruction(HloInstruction::CreateTuple({add, add}));
+  auto scan_computation = m_->AddEmbeddedComputation(scan_builder.Build());
+
+  auto builder = HloComputation::Builder(TestName());
+  // 3D input: shape {2, 2, 2}, dimension 1 is the scan dimension
+  auto input = builder.AddInstruction(
+      HloInstruction::CreateConstant(LiteralUtil::CreateR3<float>(
+          {{{1.0f, 2.0f}, {3.0f, 4.0f}}, {{5.0f, 6.0f}, {7.0f, 8.0f}}})));
+  auto init = builder.AddInstruction(HloInstruction::CreateConstant(
+      LiteralUtil::CreateR2<float>({{0.0f, 0.0f}, {0.0f, 0.0f}})));
+
+  Shape tuple_shape =
+      ShapeUtil::MakeTupleShape({ShapeUtil::MakeShape(F32, {2, 2, 2}),
+                                 ShapeUtil::MakeShape(F32, {2, 2})});
+  auto scan = builder.AddInstruction(HloInstruction::CreateScan(
+      tuple_shape, {input}, {init}, scan_computation, /*scan_dimension=*/1,
+      /*is_reverse=*/false));
+  m_->AddEntryComputation(builder.Build());
+
+  auto result = evaluator_.Evaluate(scan).value();
+
+  auto expected = LiteralUtil::MakeTupleOwned(
+      LiteralUtil::CreateR3<float>(
+          {{{1.0f, 2.0f}, {4.0f, 6.0f}}, {{5.0f, 6.0f}, {12.0f, 14.0f}}}),
+      LiteralUtil::CreateR2<float>({{4.0f, 6.0f}, {12.0f, 14.0f}}));
+  EXPECT_TRUE(LiteralTestUtil::Equal(expected, result));
+}
+
+TEST_F(HloEvaluatorTest, ScanVariadic) {
+  auto scan_builder = HloComputation::Builder("scan_add_mul");
+  auto scan_param0 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(0, ShapeUtil::MakeShape(F32, {}), "x1"));
+  auto scan_param1 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(1, ShapeUtil::MakeShape(F32, {}), "x2"));
+  auto scan_param2 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(2, ShapeUtil::MakeShape(F32, {}), "y1"));
+  auto scan_param3 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(3, ShapeUtil::MakeShape(F32, {}), "y2"));
+
+  auto add = scan_builder.AddInstruction(
+      HloInstruction::CreateBinary(ShapeUtil::MakeShape(F32, {}),
+                                   HloOpcode::kAdd, scan_param0, scan_param2));
+  auto mul = scan_builder.AddInstruction(HloInstruction::CreateBinary(
+      ShapeUtil::MakeShape(F32, {}), HloOpcode::kMultiply, scan_param1,
+      scan_param3));
+  scan_builder.AddInstruction(
+      HloInstruction::CreateTuple({add, mul, add, mul}));
+
+  auto scan_computation = m_->AddEmbeddedComputation(scan_builder.Build());
+
+  auto builder = HloComputation::Builder(TestName());
+  auto input1 = builder.AddInstruction(HloInstruction::CreateConstant(
+      LiteralUtil::CreateR1<float>({1.0f, 2.0f, 3.0f})));
+  auto input2 = builder.AddInstruction(HloInstruction::CreateConstant(
+      LiteralUtil::CreateR1<float>({1.0f, 2.0f, 3.0f})));
+
+  auto init1 = builder.AddInstruction(
+      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(0.0f)));
+  auto init2 = builder.AddInstruction(
+      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(1.0f)));
+
+  Shape tuple_shape = ShapeUtil::MakeTupleShape(
+      {ShapeUtil::MakeShape(F32, {3}), ShapeUtil::MakeShape(F32, {3}),
+       ShapeUtil::MakeShape(F32, {}), ShapeUtil::MakeShape(F32, {})});
+  auto scan = builder.AddInstruction(
+      HloInstruction::CreateScan(tuple_shape, {input1, input2}, {init1, init2},
+                                 scan_computation, /*scan_dimension=*/0,
+                                 /*is_reverse=*/false));
+  m_->AddEntryComputation(builder.Build());
+
+  auto result = evaluator_.Evaluate(scan).value();
+
+  auto expected = LiteralUtil::MakeTupleOwned(
+      LiteralUtil::CreateR1<float>({1.0f, 3.0f, 6.0f}),
+      LiteralUtil::CreateR1<float>({1.0f, 2.0f, 6.0f}),
+      LiteralUtil::CreateR0<float>(6.0f), LiteralUtil::CreateR0<float>(6.0f));
+  EXPECT_TRUE(LiteralTestUtil::Equal(expected, result));
+}
+
+TEST_F(HloEvaluatorTest, ScanDisagreeingCarry) {
+  auto scan_builder = HloComputation::Builder("scan_add_disagreeing");
+  auto scan_param0 = scan_builder.AddInstruction(
+      HloInstruction::CreateParameter(0, ShapeUtil::MakeShape(F32, {2}), "x"));
+  auto scan_param1 =
+      scan_builder.AddInstruction(HloInstruction::CreateParameter(
+          1, ShapeUtil::MakeShape(F32, {2, 2}), "y"));
+
+  // Create an add with broadcast to match the shape
+  auto broadcast_x =
+      scan_builder.AddInstruction(HloInstruction::CreateBroadcast(
+          ShapeUtil::MakeShape(F32, {2, 2}), scan_param0, {1}));
+  auto add = scan_builder.AddInstruction(
+      HloInstruction::CreateBinary(ShapeUtil::MakeShape(F32, {2, 2}),
+                                   HloOpcode::kAdd, broadcast_x, scan_param1));
+
+  // For per-step output, we'll just sum across one dimension to return it to
+  // the smaller shape
+  HloComputation::Builder reduce_builder("reduce_add");
+  auto reduce_param_lhs = reduce_builder.AddInstruction(
+      HloInstruction::CreateParameter(0, ShapeUtil::MakeShape(F32, {}), "lhs"));
+  auto reduce_param_rhs = reduce_builder.AddInstruction(
+      HloInstruction::CreateParameter(1, ShapeUtil::MakeShape(F32, {}), "rhs"));
+  reduce_builder.AddInstruction(HloInstruction::CreateBinary(
+      ShapeUtil::MakeShape(F32, {}), HloOpcode::kAdd, reduce_param_lhs,
+      reduce_param_rhs));
+  auto reduce_comp = m_->AddEmbeddedComputation(reduce_builder.Build());
+  auto reduce_init = scan_builder.AddInstruction(
+      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(0.0f)));
+  auto reduce_out = scan_builder.AddInstruction(HloInstruction::CreateReduce(
+      ShapeUtil::MakeShape(F32, {2}), add, reduce_init, {0}, reduce_comp));
+
+  scan_builder.AddInstruction(HloInstruction::CreateTuple({reduce_out, add}));
+
+  auto scan_computation = m_->AddEmbeddedComputation(scan_builder.Build());
+
+  auto builder = HloComputation::Builder(TestName());
+  auto input = builder.AddInstruction(HloInstruction::CreateConstant(
+      LiteralUtil::CreateR2<float>({{1.0f, 2.0f}, {3.0f, 4.0f}})));
+  auto init = builder.AddInstruction(HloInstruction::CreateConstant(
+      LiteralUtil::CreateR2<float>({{0.0f, 0.0f}, {0.0f, 0.0f}})));
+
+  Shape tuple_shape = ShapeUtil::MakeTupleShape(
+      {ShapeUtil::MakeShape(F32, {2, 2}), ShapeUtil::MakeShape(F32, {2, 2})});
+  auto scan = builder.AddInstruction(HloInstruction::CreateScan(
+      tuple_shape, {input}, {init}, scan_computation, /*scan_dimension=*/0,
+      /*is_reverse=*/false));
+  m_->AddEntryComputation(builder.Build());
+
+  auto result = evaluator_.Evaluate(scan).value();
+
+  // Step 1: input slice is {1.0, 2.0}. Broadcasts to {{1.0, 2.0}, {1.0, 2.0}}.
+  // add with init {{0, 0}, {0, 0}} -> {{1.0, 2.0}, {1.0, 2.0}} (new carry)
+  // reduce over dim 0 -> {2.0, 4.0} (per-step out 1)
+
+  // Step 2: input slice is {3.0, 4.0}. Broadcasts to {{3.0, 4.0}, {3.0, 4.0}}.
+  // add with carry {{1.0, 2.0}, {1.0, 2.0}} -> {{4.0, 6.0}, {4.0, 6.0}} (new
+  // carry) reduce over dim 0 -> {8.0, 12.0} (per-step out 2)
+
+  auto expected = LiteralUtil::MakeTupleOwned(
+      LiteralUtil::CreateR2<float>({{2.0f, 4.0f}, {8.0f, 12.0f}}),
+      LiteralUtil::CreateR2<float>({{4.0f, 6.0f}, {4.0f, 6.0f}}));
+  EXPECT_TRUE(LiteralTestUtil::Equal(expected, result));
+}
+
 TEST(EvalErrorTest, OK) {
   EXPECT_EQ(std::nullopt, internal::ParseEvalErrorDetail(absl::OkStatus()));
 }
