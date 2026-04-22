@@ -122,14 +122,20 @@ class HloDataflowAnalysisTest : public HloHardwareIndependentTestBase,
 
 TEST_P(HloDataflowAnalysisTest, BinaryOperation) {
   // Test the dataflow for a simple binary operation (Add).
-  auto builder = HloComputation::Builder(TestName());
-  auto constant1 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(1.0)));
-  auto constant2 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(2.0)));
-  auto add = builder.AddInstruction(HloInstruction::CreateBinary(
-      scalar_shape_, HloOpcode::kAdd, constant1, constant2));
-  module_->AddEntryComputation(builder.Build());
+  std::string hlo_str = R"(
+HloModule BinaryOperation
+
+ENTRY main {
+  const1 = f32[] constant(1.0)
+  const2 = f32[] constant(2.0)
+  ROOT add = f32[] add(const1, const2)
+}
+)";
+  TF_ASSERT_OK_AND_ASSIGN(
+      module_, ParseAndReturnVerifiedModule(hlo_str, GetModuleConfigForTest()));
+  HloInstruction* constant1 = FindInstruction(module_.get(), "const1");
+  HloInstruction* constant2 = FindInstruction(module_.get(), "const2");
+  HloInstruction* add = FindInstruction(module_.get(), "add");
   SCOPED_TRACE(module_->ToString());
 
   bool ssa_form = GetParam();
@@ -170,20 +176,32 @@ TEST_P(HloDataflowAnalysisTest, BinaryOperation) {
 
 TEST_P(HloDataflowAnalysisTest, TupleAndGtes) {
   // Verify the dataflow through a Tuple and GetTupleElement instructions.
-  auto builder = HloComputation::Builder(TestName());
-  auto param0 = builder.AddInstruction(
-      HloInstruction::CreateParameter(0, scalar_shape_, "param0"));
-  auto param1 = builder.AddInstruction(
-      HloInstruction::CreateParameter(1, scalar_shape_, "param1"));
-  auto tuple =
-      builder.AddInstruction(HloInstruction::CreateTuple({param0, param1}));
-  auto gte0 = builder.AddInstruction(
-      HloInstruction::CreateGetTupleElement(scalar_shape_, tuple, 0));
-  auto gte1 = builder.AddInstruction(
-      HloInstruction::CreateGetTupleElement(scalar_shape_, tuple, 1));
-  auto add = builder.AddInstruction(
-      HloInstruction::CreateBinary(scalar_shape_, HloOpcode::kAdd, gte0, gte1));
-  module_->AddEntryComputation(builder.Build());
+  std::string hlo_str = R"(
+HloModule TupleAndGtes
+
+ENTRY main {
+  p0 = f32[] parameter(0)
+  p1 = f32[] parameter(1)
+  tuple = (f32[], f32[]) tuple(p0, p1)
+  gte0 = f32[] get-tuple-element(tuple), index=0
+  gte1 = f32[] get-tuple-element(tuple), index=1
+  ROOT add = f32[] add(gte0, gte1)
+}
+)";
+  TF_ASSERT_OK_AND_ASSIGN(
+      module_, ParseAndReturnVerifiedModule(hlo_str, GetModuleConfigForTest()));
+  HloInstruction* param0 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "p0"));
+  HloInstruction* param1 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "p1"));
+  HloInstruction* tuple =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "tuple"));
+  HloInstruction* gte0 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "gte0"));
+  HloInstruction* gte1 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "gte1"));
+  HloInstruction* add =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "add"));
   SCOPED_TRACE(module_->ToString());
 
   bool ssa_form = GetParam();
@@ -226,20 +244,32 @@ TEST_P(HloDataflowAnalysisTest, TupleAndGtes) {
 
 TEST_P(HloDataflowAnalysisTest, NestedTuple) {
   // Verify the dataflow through a nested tuple.
-  auto builder = HloComputation::Builder(TestName());
-  auto constant1 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(1.0)));
-  auto constant2 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(2.0)));
-  auto tuple = builder.AddInstruction(
-      HloInstruction::CreateTuple({constant1, constant2}));
-  auto nested_tuple = builder.AddInstruction(
-      HloInstruction::CreateTuple({tuple, tuple, constant1}));
-  auto gte_tuple = builder.AddInstruction(
-      HloInstruction::CreateGetTupleElement(tuple->shape(), nested_tuple, 1));
-  auto gte_out = builder.AddInstruction(
-      HloInstruction::CreateGetTupleElement(scalar_shape_, gte_tuple, 0));
-  module_->AddEntryComputation(builder.Build());
+  std::string hlo_str = R"(
+HloModule NestedTuple
+
+ENTRY main {
+  const1 = f32[] constant(1.0)
+  const2 = f32[] constant(2.0)
+  tuple = (f32[], f32[]) tuple(const1, const2)
+  nested_tuple = ((f32[], f32[]), (f32[], f32[]), f32[]) tuple(tuple, tuple, const1)
+  gte_tuple = (f32[], f32[]) get-tuple-element(nested_tuple), index=1
+  ROOT gte_out = f32[] get-tuple-element(gte_tuple), index=0
+}
+)";
+  TF_ASSERT_OK_AND_ASSIGN(
+      module_, ParseAndReturnVerifiedModule(hlo_str, GetModuleConfigForTest()));
+  HloInstruction* constant1 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "const1"));
+  HloInstruction* constant2 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "const2"));
+  HloInstruction* tuple =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "tuple"));
+  HloInstruction* nested_tuple = const_cast<HloInstruction*>(
+      FindInstruction(module_.get(), "nested_tuple"));
+  HloInstruction* gte_tuple =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "gte_tuple"));
+  HloInstruction* gte_out =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "gte_out"));
   SCOPED_TRACE(module_->ToString());
 
   bool ssa_form = GetParam();
@@ -278,24 +308,35 @@ TEST_P(HloDataflowAnalysisTest, NestedTuple) {
 TEST_P(HloDataflowAnalysisTest, SingleCall) {
   // Test a single call of a subcomputation. The subcomputation adds its two
   // array-shaped parameters.
-  auto subbuilder = HloComputation::Builder("Subcomputation");
-  auto subparam0 = subbuilder.AddInstruction(
-      HloInstruction::CreateParameter(0, scalar_shape_, "param0"));
-  auto subparam1 = subbuilder.AddInstruction(
-      HloInstruction::CreateParameter(1, scalar_shape_, "param1"));
-  auto add = subbuilder.AddInstruction(HloInstruction::CreateBinary(
-      scalar_shape_, HloOpcode::kAdd, subparam0, subparam1));
-  HloComputation* called_computation =
-      module_->AddEmbeddedComputation(subbuilder.Build());
+  std::string hlo_str = R"(
+HloModule SingleCall
 
-  auto builder = HloComputation::Builder(TestName());
-  auto constant1 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(1.0)));
-  auto constant2 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(2.0)));
-  auto call = builder.AddInstruction(HloInstruction::CreateCall(
-      scalar_shape_, {constant1, constant2}, called_computation));
-  module_->AddEntryComputation(builder.Build());
+Subcomputation {
+  param0 = f32[] parameter(0)
+  param1 = f32[] parameter(1)
+  ROOT add = f32[] add(param0, param1)
+}
+
+ENTRY main {
+  const1 = f32[] constant(1.0)
+  const2 = f32[] constant(2.0)
+  ROOT call = f32[] call(const1, const2), to_apply=Subcomputation
+}
+)";
+  TF_ASSERT_OK_AND_ASSIGN(
+      module_, ParseAndReturnVerifiedModule(hlo_str, GetModuleConfigForTest()));
+  HloInstruction* subparam0 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "param0"));
+  HloInstruction* subparam1 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "param1"));
+  HloInstruction* add =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "add"));
+  HloInstruction* constant1 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "const1"));
+  HloInstruction* constant2 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "const2"));
+  HloInstruction* call =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "call"));
   SCOPED_TRACE(module_->ToString());
 
   bool ssa_form = GetParam();
@@ -341,35 +382,39 @@ TEST_P(HloDataflowAnalysisTest, NestedCalls) {
   //   %constant2 = Constant(2.0)
   //   %call = Call(outer_computation, {%constant1, %constant2})
   //
-  auto inner_builder = HloComputation::Builder("InnerComputation");
-  auto inner_param0 = inner_builder.AddInstruction(
-      HloInstruction::CreateParameter(0, scalar_shape_, "param0"));
-  auto inner_param1 = inner_builder.AddInstruction(
-      HloInstruction::CreateParameter(1, scalar_shape_, "param1"));
-  auto add = inner_builder.AddInstruction(HloInstruction::CreateBinary(
-      scalar_shape_, HloOpcode::kAdd, inner_param0, inner_param1));
-  HloComputation* inner_computation =
-      module_->AddEmbeddedComputation(inner_builder.Build());
+  std::string hlo_str = R"(
+HloModule NestedCalls
 
-  auto outer_builder = HloComputation::Builder("OuterComputation");
-  auto outer_param0 = outer_builder.AddInstruction(
-      HloInstruction::CreateParameter(0, scalar_shape_, "param0"));
-  auto outer_param1 = outer_builder.AddInstruction(
-      HloInstruction::CreateParameter(1, scalar_shape_, "param1"));
-  // Swizzle parameters.
-  auto nested_call = outer_builder.AddInstruction(HloInstruction::CreateCall(
-      scalar_shape_, {outer_param1, outer_param0}, inner_computation));
-  HloComputation* outer_computation =
-      module_->AddEmbeddedComputation(outer_builder.Build());
+InnerComputation {
+  inner_p0 = f32[] parameter(0)
+  inner_p1 = f32[] parameter(1)
+  ROOT add = f32[] add(inner_p0, inner_p1)
+}
 
-  auto builder = HloComputation::Builder(TestName());
-  auto constant1 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(1.0)));
-  auto constant2 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(2.0)));
-  auto call = builder.AddInstruction(HloInstruction::CreateCall(
-      scalar_shape_, {constant1, constant2}, outer_computation));
-  module_->AddEntryComputation(builder.Build());
+OuterComputation {
+  outer_p0 = f32[] parameter(0)
+  outer_p1 = f32[] parameter(1)
+  ROOT nested_call = f32[] call(outer_p1, outer_p0), to_apply=InnerComputation
+}
+
+ENTRY main {
+  const1 = f32[] constant(1.0)
+  const2 = f32[] constant(2.0)
+  ROOT call = f32[] call(const1, const2), to_apply=OuterComputation
+}
+)";
+  TF_ASSERT_OK_AND_ASSIGN(
+      module_, ParseAndReturnVerifiedModule(hlo_str, GetModuleConfigForTest()));
+  HloInstruction* add =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "add"));
+  HloInstruction* nested_call = const_cast<HloInstruction*>(
+      FindInstruction(module_.get(), "nested_call"));
+  HloInstruction* constant1 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "const1"));
+  HloInstruction* constant2 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "const2"));
+  HloInstruction* call =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "call"));
   SCOPED_TRACE(module_->ToString());
 
   bool ssa_form = GetParam();
@@ -414,38 +459,46 @@ TEST_P(HloDataflowAnalysisTest, SingleWhile) {
       ShapeUtil::MakeTupleShape({scalar_shape_, scalar_shape_});
 
   // Element 0 passes transparently through the body.
-  auto body_builder = HloComputation::Builder("body");
-  auto body_param = body_builder.AddInstruction(
-      HloInstruction::CreateParameter(0, tuple_shape, "param"));
-  auto body_element_0 = body_builder.AddInstruction(
-      HloInstruction::CreateGetTupleElement(scalar_shape_, body_param, 0));
-  auto body_element_1 = body_builder.AddInstruction(
-      HloInstruction::CreateGetTupleElement(scalar_shape_, body_param, 1));
-  auto add = body_builder.AddInstruction(HloInstruction::CreateBinary(
-      scalar_shape_, HloOpcode::kAdd, body_element_0, body_element_1));
-  auto body_root = body_builder.AddInstruction(
-      HloInstruction::CreateTuple({body_element_0, add}));
-  HloComputation* body = module_->AddEmbeddedComputation(body_builder.Build());
+  std::string hlo_str = R"(
+HloModule SingleWhile
 
-  // Condition computation trivially returns a constant "false".
-  auto cond_builder = HloComputation::Builder("condition");
-  auto cond_param = cond_builder.AddInstruction(
-      HloInstruction::CreateParameter(0, tuple_shape, "param"));
-  auto cond_constant = cond_builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<bool>(false)));
-  HloComputation* condition =
-      module_->AddEmbeddedComputation(cond_builder.Build());
+body (tuple_param: (f32[], f32[])) -> (f32[], f32[]) {
+  body_param = (f32[], f32[]) parameter(0)
+  body_gte0 = f32[] get-tuple-element(body_param), index=0
+  body_gte1 = f32[] get-tuple-element(body_param), index=1
+  add = f32[] add(body_gte0, body_gte1)
+  ROOT body_root = (f32[], f32[]) tuple(body_gte0, add)
+}
 
-  auto builder = HloComputation::Builder(TestName());
-  auto constant1 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(1.0)));
-  auto constant2 = builder.AddInstruction(
-      HloInstruction::CreateConstant(LiteralUtil::CreateR0<float>(2.0)));
-  auto tuple = builder.AddInstruction(
-      HloInstruction::CreateTuple({constant1, constant2}));
-  auto xla_while = builder.AddInstruction(
-      HloInstruction::CreateWhile(tuple_shape, condition, body, tuple));
-  module_->AddEntryComputation(builder.Build());
+condition (tuple_param: (f32[], f32[])) -> pred[] {
+  cond_param = (f32[], f32[]) parameter(0)
+  ROOT cond_constant = pred[] constant(false)
+}
+
+ENTRY main {
+  const1 = f32[] constant(1.0)
+  const2 = f32[] constant(2.0)
+  tuple = (f32[], f32[]) tuple(const1, const2)
+  ROOT while_op = (f32[], f32[]) while(tuple), condition=condition, body=body
+}
+)";
+  TF_ASSERT_OK_AND_ASSIGN(
+      module_, ParseAndReturnVerifiedModule(hlo_str, GetModuleConfigForTest()));
+  HloInstruction* body_param =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "body_param"));
+  HloInstruction* add =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "add"));
+  HloInstruction* body_root =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "body_root"));
+  HloInstruction* cond_param =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "cond_param"));
+  HloInstruction* cond_constant = const_cast<HloInstruction*>(
+      FindInstruction(module_.get(), "cond_constant"));
+  HloInstruction* constant1 =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "const1"));
+
+  HloInstruction* xla_while =
+      const_cast<HloInstruction*>(FindInstruction(module_.get(), "while_op"));
   SCOPED_TRACE(module_->ToString());
 
   bool ssa_form = GetParam();
@@ -1134,6 +1187,9 @@ TEST_P(HloDataflowAnalysisTest, AsyncOps) {
   EXPECT_THAT(HloValuesAt(async_update, /*index=*/{1}),
               UnorderedElementsAre(
                   &analysis.GetValueDefinedAt(async_wrapped_instruction, {})));
+  EXPECT_THAT(
+      HloValuesAt(async_update, /*index=*/{2}),
+      UnorderedElementsAre(&analysis.GetValueDefinedAt(async_start, {2})));
 
   EXPECT_FALSE(analysis.ValueIsDefinedAt(async_done, /*index=*/{}));
   EXPECT_THAT(HloValuesAt(async_done, /*index=*/{}),
@@ -1175,6 +1231,10 @@ ENTRY %main (a: f32[4096], b: f32[4096]) -> f32[4096] {
   const HloInstruction* b = FindInstruction(module_.get(), "b");
   const HloInstruction* async_done =
       FindInstruction(module_.get(), "async-done");
+  const HloInstruction* async_start =
+      FindInstruction(module_.get(), "async-start");
+  const HloInstruction* async_update =
+      FindInstruction(module_.get(), "async-update");
 
   // For each of the async operations, ensure the called computation
   // parameter/root instructions have the same HloValues as the callees.
@@ -1197,6 +1257,80 @@ ENTRY %main (a: f32[4096], b: f32[4096]) -> f32[4096] {
     EXPECT_THAT(HloValuesAt(async_done),
                 UnorderedElementsAre(&analysis.GetValueDefinedAt(root)));
   }
+
+  // Track origin of all components for AsyncCall
+  EXPECT_THAT(HloValuesAt(async_start, {0, 0}),
+              UnorderedElementsAre(&analysis.GetValueDefinedAt(a)));
+  EXPECT_THAT(HloValuesAt(async_start, {0, 1}),
+              UnorderedElementsAre(&analysis.GetValueDefinedAt(b)));
+  EXPECT_TRUE(analysis.ValueIsDefinedAt(async_start, {2}));
+
+  EXPECT_THAT(HloValuesAt(async_update, {0, 0}),
+              UnorderedElementsAre(&analysis.GetValueDefinedAt(a)));
+  EXPECT_THAT(HloValuesAt(async_update, {0, 1}),
+              UnorderedElementsAre(&analysis.GetValueDefinedAt(b)));
+  EXPECT_THAT(
+      HloValuesAt(async_update, {2}),
+      UnorderedElementsAre(&analysis.GetValueDefinedAt(async_start, {2})));
+}
+
+TEST_P(HloDataflowAnalysisTest, AsyncCallExcludedThread) {
+  std::string hlo_str = R"(
+HloModule AsyncCall
+
+%called_computation {
+  %param_0 = f32[4096] parameter(0)
+  %param_1 = f32[4096] parameter(1)
+  %negate_0 = f32[4096] negate(%param_0)
+  %negate_1 = f32[4096] negate(%param_1)
+  ROOT %result.1 = f32[4096] add(%negate_0, %negate_1)
+}
+
+ENTRY %main {
+  %a = f32[4096] parameter(0)
+  %b = f32[4096] parameter(1)
+  %async-start = ((f32[4096], f32[4096]), f32[4096], u32[]) call-start(%a, %b),
+    to_apply=%called_computation, async_execution_thread="excluded_thread"
+  %negate_2 = f32[4096] negate(f32[4096] %a)
+  %async-update = ((f32[4096], f32[4096]), f32[4096], u32[]) call-update(%async-start)
+  %async-done = f32[4096] call-done(%async-update)
+  ROOT %add_1 = f32[4096] add(%negate_2, %async-done)
+}
+)";
+  TF_ASSERT_OK_AND_ASSIGN(
+      module_, ParseAndReturnVerifiedModule(hlo_str, GetModuleConfigForTest()));
+
+  bool ssa_form = GetParam();
+
+  // Run analysis with excluded thread.
+  auto analysis_or = HloDataflowAnalysis::Run(
+      *module_, ssa_form, /*bitcast_defines_value=*/false, {"main"});
+  TF_ASSERT_OK(analysis_or.status());
+  analysis_ = std::move(analysis_or).value();
+  const HloDataflowAnalysis& analysis = *analysis_;
+
+  const HloInstruction* async_start =
+      FindInstruction(module_.get(), "async-start");
+  const HloInstruction* async_update =
+      FindInstruction(module_.get(), "async-update");
+  const HloInstruction* async_done =
+      FindInstruction(module_.get(), "async-done");
+
+  // AsyncStart defines a new value at {1} because the thread is excluded.
+  EXPECT_TRUE(analysis.ValueIsDefinedAt(async_start, {1}));
+
+  // AsyncUpdate at {1} should contain that new value (it forwards it).
+  EXPECT_FALSE(analysis.ValueIsDefinedAt(async_update, {1}));
+  EXPECT_THAT(
+      HloValuesAt(async_update, {1}),
+      UnorderedElementsAre(&analysis.GetValueDefinedAt(async_start, {1})));
+
+  // AsyncDone output should contain that new value (it forwards it from
+  // AsyncUpdate at {1}).
+  EXPECT_FALSE(analysis.ValueIsDefinedAt(async_done, {}));
+  EXPECT_THAT(
+      HloValuesAt(async_done, {}),
+      UnorderedElementsAre(&analysis.GetValueDefinedAt(async_start, {1})));
 }
 
 TEST_P(HloDataflowAnalysisTest, AsyncCallWithConditional) {
@@ -1295,6 +1429,17 @@ TEST_P(HloDataflowAnalysisTest, TupleShapedAsyncOp) {
   EXPECT_TRUE(analysis.ValueIsDefinedAt(async_start, /*index=*/{1}));
   EXPECT_TRUE(analysis.ValueIsDefinedAt(async_update, /*index=*/{1}));
   EXPECT_TRUE(analysis.ValueIsDefinedAt(async_done));
+
+  const HloInstruction* p0 = FindInstruction(module_.get(), "p0");
+  EXPECT_THAT(HloValuesAt(async_start, {0, 0}),
+              UnorderedElementsAre(&analysis.GetValueDefinedAt(p0)));
+  EXPECT_TRUE(analysis.ValueIsDefinedAt(async_start, {2}));
+
+  EXPECT_THAT(HloValuesAt(async_update, {0, 0}),
+              UnorderedElementsAre(&analysis.GetValueDefinedAt(p0)));
+  EXPECT_THAT(
+      HloValuesAt(async_update, {2}),
+      UnorderedElementsAre(&analysis.GetValueDefinedAt(async_start, {2})));
 }
 
 TEST_P(HloDataflowAnalysisTest, SendAndSendDone) {
