@@ -108,5 +108,53 @@ TEST_F(ScanExpanderTest, ExpandsScanComplex) {
   )");
 }
 
+TEST_F(ScanExpanderTest, ExpandsAssociativeScanByDefault) {
+  const char* kModuleStr = R"(
+    HloModule scan_module
+
+    add {
+      input = f32[] parameter(0)
+      acc = f32[] parameter(1)
+      add = f32[] add(acc, input)
+      ROOT t = (f32[], f32[]) tuple(add, add)
+    }
+
+    ENTRY Scan {
+      input = f32[4]{0} parameter(0)
+      init = f32[] constant(0)
+      ROOT scan = (f32[4]{0}, f32[]) scan(input, init), dimensions={0}, num_carries=1, is_reverse=false, to_apply=add, is_associative=true
+    }
+  )";
+
+  RunAndFilecheckHloRewrite(kModuleStr, ScanExpander(), R"(
+    // CHECK-NOT: scan(
+    // CHECK: while(
+  )");
+}
+
+TEST_F(ScanExpanderTest, DoesNotExpandAssociativeScanWhenDisabled) {
+  const char* kModuleStr = R"(
+    HloModule scan_module
+
+    add {
+      input = f32[] parameter(0)
+      acc = f32[] parameter(1)
+      add = f32[] add(acc, input)
+      ROOT t = (f32[], f32[]) tuple(add, add)
+    }
+
+    ENTRY Scan {
+      input = f32[4]{0} parameter(0)
+      init = f32[] constant(0)
+      ROOT scan = (f32[4]{0}, f32[]) scan(input, init), dimensions={0}, num_carries=1, is_reverse=false, to_apply=add, is_associative=true
+    }
+  )";
+
+  HloModuleConfig config;
+  auto module = ParseAndReturnUnverifiedModule(kModuleStr, config).value();
+  ScanExpander expander(/*expand_associative_scans=*/false);
+  EXPECT_FALSE(expander.Run(module.get()).value());
+}
+
 }  // namespace
 }  // namespace xla
